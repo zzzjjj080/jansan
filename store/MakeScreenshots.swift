@@ -16,9 +16,9 @@ struct Shot {
 
 let shots = [
     Shot(file: "01-main.png",     title: "3人打てば、4人目は自動", subtitle: "合計が0になるよう逆算します"),
-    Shot(file: "02-input.png",    title: "確定前に、入る数字が見える", subtitle: "マイナスは赤。符号の付け忘れに気づけます"),
+    Shot(file: "02-fit.png",      title: "6人でも1画面に収まる", subtitle: "人数と局数に合わせて自動で縮小。横スクロールなし"),
     Shot(file: "03-stats.png",    title: "着順も推移も、ひと目で", subtitle: "打つほど成績が積み上がります"),
-    Shot(file: "04-settings.png", title: "5〜6人で回しても大丈夫", subtitle: "打った人をタップするだけ。休みは自動"),
+    Shot(file: "04-settings.png", title: "抜け番があっても迷わない", subtitle: "打った人をタップするだけ。休みは自動で入ります"),
     Shot(file: "05-export.png",   title: "CSVで書き出して共有", subtitle: "メモにもスプレッドシートにも貼れます"),
 ]
 

@@ -314,14 +314,17 @@ final class ScoreBoard {
             [-32, 71, -50], [51, -52, 15], [15, -32, 61], [9, -51, 53],
             [5, 43, -15], [-53, 56, -16], [-23, 67, 20], [-18, -22, 55],
         ]
+        let playerCount = session.players.count
         for round in 0..<count {
             let scores = samples[round % samples.count]
-            for (column, score) in scores.enumerated() {
-                session.enter(score, at: Position(round: round, column: column))
+            // 5人以上のときは打つ4人を毎局ずらす。同じ人がずっとお休みだと
+            // 実際の卓の様子と違ううえ、見た目でも列が死んで見える
+            let seats = (0..<4).map { (round + $0) % playerCount }
+            for (index, score) in scores.enumerated() {
+                session.enter(score, at: Position(round: round, column: seats[index]))
             }
-            // 5〜6人打ちは4人目を指定しないと局が閉じない
             if session.needsWinnerDesignation(at: round) {
-                session.designateWinner(at: Position(round: round, column: 3))
+                session.designateWinner(at: Position(round: round, column: seats[3]))
             }
         }
         deselect()

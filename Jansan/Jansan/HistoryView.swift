@@ -38,8 +38,7 @@ struct HistoryView: View {
             .navigationTitle("保存した記録")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // EditButtonはアプリを日本語化するまで英語表記になるうえ、
-                // 各行のゴミ箱ボタンとスワイプ削除で用は足りるので置かない
+                // 各行のゴミ箱ボタンとスワイプ削除で用は足りるので、EditButtonは置かない
                 ToolbarItem(placement: .confirmationAction) {
                     Button("閉じる") { dismiss() }
                 }
