@@ -6,6 +6,7 @@ struct SettingsView: View {
     @Binding var showHistory: Bool
     @Environment(\.dismiss) private var dismiss
 
+    @State private var didSave = false
     @State private var limitAlert = false
     @State private var pendingDeletion: Int?
     @State private var resetConfirm = false
@@ -16,6 +17,7 @@ struct SettingsView: View {
                 membersSection
                 presetsSection
                 inputSection
+                recordSection
                 dangerSection
 #if DEBUG
                 debugSection
@@ -130,15 +132,37 @@ struct SettingsView: View {
         }
     }
 
-    private var dangerSection: some View {
+    private var recordSection: some View {
         Section {
+            Button {
+                board.archiveCurrentGame()
+                didSave = true
+                Task {
+                    try? await Task.sleep(for: .seconds(1.8))
+                    didSave = false
+                }
+            } label: {
+                Label(
+                    didSave ? "保存しました" : "この対局を記録に残す",
+                    systemImage: didSave ? "checkmark.circle.fill" : "square.and.arrow.down"
+                )
+                .foregroundStyle(didSave ? Palette.accent : Color.accentColor)
+            }
+
             Button("保存した記録を見る") {
                 dismiss()
                 showHistory = true
             }
-            Button("新規セッションにする", role: .destructive) { resetConfirm = true }
+        } header: {
+            Text("記録")
         } footer: {
-            Text("入力中の内容は自動で保存されるので、アプリを閉じても続きから再開できます。「保存した記録」は別枠で、残したい対局を明示的に残すためのものです。")
+            Text("入力中の内容は自動で保存されるので、アプリを閉じても続きから再開できます。ここで残す「記録」は別枠で、後から振り返りたい対局を日付付きで取っておくためのものです。")
+        }
+    }
+
+    private var dangerSection: some View {
+        Section {
+            Button("新規セッションにする", role: .destructive) { resetConfirm = true }
         }
     }
 

@@ -12,7 +12,6 @@ struct ContentView: View {
     @State private var showHistory = false
     @State private var showStats = false
     @State private var showExport = false
-    @State private var justSaved = false
     @Environment(\.modelContext) private var context
 
     var body: some View {
@@ -44,18 +43,6 @@ struct ContentView: View {
             // 前回の続きがあればここで復元される
             board.attach(context: context)
         }
-        .overlay(alignment: .top) {
-            if justSaved {
-                Text("保存しました")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Palette.accentInk)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 9)
-                    .background(Palette.accent, in: Capsule())
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
-        .animation(.easeOut(duration: 0.2), value: justSaved)
     }
 
     private var appBar: some View {
@@ -69,15 +56,8 @@ struct ContentView: View {
                     .foregroundStyle(Palette.inkDim)
             }
             Spacer()
-            HStack(spacing: 14) {
-                // テンキーを閉じたあと開き直すための入口
-                if !board.isKeypadVisible {
-                    Button {
-                        board.isKeypadVisible = true
-                    } label: {
-                        Image(systemName: "keyboard")
-                    }
-                }
+            // テンキーを閉じてもマスをタップすれば開くので、開き直すボタンは置かない
+            HStack(spacing: 18) {
                 Button {
                     showStats = true
                 } label: {
@@ -87,16 +67,6 @@ struct ContentView: View {
                     showExport = true
                 } label: {
                     Image(systemName: "square.and.arrow.up")
-                }
-                Button {
-                    board.archiveCurrentGame()
-                    justSaved = true
-                    Task {
-                        try? await Task.sleep(for: .seconds(1.6))
-                        justSaved = false
-                    }
-                } label: {
-                    Image(systemName: "square.and.arrow.down")
                 }
                 Button {
                     showSettings = true
