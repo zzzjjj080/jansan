@@ -124,14 +124,21 @@ final class ScoreBoard {
         return isNegative ? -magnitude : magnitude
     }
 
-    /// テンキー上部の表示。打ち始める前は選択中の人の名前を出す
+    /// テンキー上部の表示。打ち始める前は選択中の人の名前を出すが、
+    /// マイナスを押した時点で数字側の表示に切り替える
     var keypadCaption: String {
         guard let selection else { return "タップして入力" }
-        guard let pendingValue else { return session.players[selection.column] }
-        return ScoreFormatter.string(pendingValue, decimalMode: decimalMode)
+        if let pendingValue {
+            return ScoreFormatter.string(pendingValue, decimalMode: decimalMode)
+        }
+        if isNegative { return "−" }
+        return session.players[selection.column]
     }
 
     var isCaptionPlaceholder: Bool { selection == nil }
+
+    /// マイナス入力中はキャプションもマスのプレビューも赤で出す
+    var isEnteringNegative: Bool { selection != nil && isNegative }
 
     // MARK: - マスの操作
 

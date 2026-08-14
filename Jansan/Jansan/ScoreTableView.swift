@@ -172,7 +172,8 @@ struct ScoreTableView: View {
     }
 
     private func foreground(entry: Entry, preview: Int?, isTop: Bool, isLast: Bool) -> Color {
-        if preview != nil { return Palette.toneBInk }
+        // 入力中でもマイナスかどうかが一目で分かるように、符号で色を変える
+        if let preview { return preview < 0 ? Palette.negative : Palette.toneBInk }
         if entry.isResting { return Palette.resting }
         guard let value = entry.value else { return Palette.inkDim }
         if isTop { return Palette.topInk }

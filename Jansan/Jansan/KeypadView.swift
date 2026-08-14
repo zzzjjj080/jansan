@@ -69,9 +69,14 @@ struct KeypadView: View {
                 weight: board.isCaptionPlaceholder ? .semibold : .heavy
             ))
             .monospacedDigit()
-            .foregroundStyle(board.isCaptionPlaceholder ? Palette.inkDim : Palette.accent)
+            .foregroundStyle(captionColor)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 30)
+    }
+
+    private var captionColor: Color {
+        if board.isCaptionPlaceholder { return Palette.inkDim }
+        return board.isEnteringNegative ? Palette.negative : Palette.accent
     }
 
     private func digitKey(_ digit: String) -> some View {
