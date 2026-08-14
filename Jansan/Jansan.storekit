@@ -1,0 +1,39 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [ ]
+  },
+  "identifier" : "A1B2C3D4",
+  "nonRenewingSubscriptions" : [ ],
+  "products" : [
+    {
+      "displayPrice" : "100",
+      "familyShareable" : false,
+      "internalID" : "TIP100",
+      "localizations" : [
+        {
+          "description" : "開発者に100円のカンパを送ります",
+          "displayName" : "100円カンパ",
+          "locale" : "ja_JP"
+        }
+      ],
+      "productID" : "com.zzzjjj080.Jansan.tip100",
+      "referenceName" : "100円カンパ",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "0",
+    "_developerTeamID" : "0",
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 0,
+    "_locale" : "ja_JP",
+    "_storefront" : "JPN",
+    "_storeKitErrors" : [ ]
+  },
+  "subscriptionGroups" : [ ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}
