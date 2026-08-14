@@ -15,6 +15,8 @@ final class SavedGame {
     var isDraft: Bool
     var playerNames: [String]
     var totals: [Int]
+    /// 実際に打った局数。既存の記録との互換のため既定値を持たせる
+    var roundCount: Int = 0
     /// 保存した時点の小数点モード。現在の設定で解釈すると10倍に見えてしまうため一緒に残す
     var decimalMode: Bool
     var payload: Data
@@ -24,6 +26,7 @@ final class SavedGame {
         self.isDraft = isDraft
         self.playerNames = snapshot.session.players
         self.totals = snapshot.session.totals
+        self.roundCount = snapshot.session.playedRoundCount
         self.decimalMode = snapshot.session.decimalMode
         self.payload = try JSONEncoder().encode(snapshot)
     }
@@ -40,6 +43,11 @@ final class SavedGame {
                 .hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)
                 .locale(Locale(identifier: "ja_JP"))
         )
+    }
+
+    /// 「4人打ち・8局」のような見出し
+    var shapeLabel: String {
+        "\(playerNames.count)人打ち・\(roundCount)局"
     }
 
     /// 「中村 +12.3 / 五十嵐 -8.0」のような一覧用の1行

@@ -28,6 +28,13 @@ public struct Session: Equatable, Sendable, Codable {
 
     // MARK: - 合計
 
+    /// 実際に打った局数。最後にぶら下がっている入力待ちの空行は数えない
+    public var playedRoundCount: Int {
+        rounds.filter { round in
+            round.entries.contains { $0.value != nil || $0.isResting }
+        }.count
+    }
+
     public var totals: [Int] {
         players.indices.map { column in
             rounds.reduce(0) { $0 + (($1.entries[column].value) ?? 0) }

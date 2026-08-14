@@ -77,6 +77,7 @@ final class ScoreBoard {
                 draft.savedAt = .now
                 draft.playerNames = current.session.players
                 draft.totals = current.session.totals
+                draft.roundCount = current.session.playedRoundCount
                 draft.decimalMode = current.session.decimalMode
                 draft.payload = try JSONEncoder().encode(current)
             } else {

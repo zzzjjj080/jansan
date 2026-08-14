@@ -65,6 +65,21 @@ struct RoundAppendTests {
         #expect(Session(players: yonma).rounds.count == 1)
     }
 
+    @Test("入力待ちの空行は局数に数えない")
+    func playedRoundCountIgnoresTrailingBlank() {
+        var session = Session(players: yonma)
+        #expect(session.playedRoundCount == 0)
+
+        session.enter(-32, at: Position(round: 0, column: 0))
+        #expect(session.playedRoundCount == 1) // 入力途中でも1局として数える
+
+        session.enter(71, at: Position(round: 0, column: 1))
+        session.enter(-50, at: Position(round: 0, column: 2))
+        // 空行が足された直後。増えた行は数えない
+        #expect(session.rounds.count == 2)
+        #expect(session.playedRoundCount == 1)
+    }
+
     @Test("局が埋まると次の空行が足される")
     func appendsWhenComplete() {
         var session = Session(players: yonma)

@@ -9,23 +9,34 @@ struct ScoreTableView: View {
     private let baseFontSize: CGFloat = 14.5
     private let noColumnWidth: CGFloat = 30
 
-    private var session: Session { board.session }
-
     var body: some View {
+        // board.session は描画の途中でも差し替わりうる(記録の読み込み、人数変更)。
+        // ForEach の中身は遅延評価されるため、都度読み直すと
+        // 「行を組んだ時点の人数」と「マスを描く時点の人数」がズレて範囲外アクセスになる。
+        // ここで一度だけ読み、以降は添字ではなく値そのものを渡していく。
+        let session = board.session
+
         GeometryReader { geometry in
-            let scale = fitScale(forHeight: geometry.size.height)
+            let scale = fitScale(roundCount: session.rounds.count, height: geometry.size.height)
             // 名前の行と合計の行は常に見えていてほしいので、スクロールするのは中身だけ
-            let chromeHeight = baseHeaderHeight * scale * 2
-            let available = max(0, geometry.size.height - chromeHeight)
+            let chrome = baseHeaderHeight * scale * 2
+            let available = max(0, geometry.size.height - chrome)
             let required = baseRowHeight * scale * CGFloat(session.rounds.count)
 
             VStack(spacing: 0) {
-                headerRow(scale: scale)
+                headerRow(players: session.players, scale: scale)
+
                 ScrollViewReader { proxy in
                     ScrollView(.vertical) {
                         VStack(spacing: 0) {
-                            ForEach(session.rounds.indices, id: \.self) { round in
-                                scoreRow(round: round, scale: scale).id(round)
+                            ForEach(Array(session.rounds.enumerated()), id: \.offset) { index, round in
+                                scoreRow(
+                                    round: round,
+                                    index: index,
+                                    decimalMode: session.decimalMode,
+                                    scale: scale
+                                )
+                                .id(index)
                             }
                         }
                     }
@@ -39,7 +50,8 @@ struct ScoreTableView: View {
                         withAnimation { proxy.scrollTo(count - 1, anchor: .bottom) }
                     }
                 }
-                totalsRow(scale: scale)
+
+                totalsRow(totals: session.totals, decimalMode: session.decimalMode, scale: scale)
                 Spacer(minLength: 0)
             }
         }
@@ -50,22 +62,22 @@ struct ScoreTableView: View {
     /// 必要な高さは行数から計算できるので、SwiftUIでは一度で倍率を出せる。
     ///
     /// 0.55 より小さくすると数字が読めなくなるので、そこから先は縮めずスクロールに任せる。
-    private func fitScale(forHeight height: CGFloat) -> CGFloat {
+    private func fitScale(roundCount: Int, height: CGFloat) -> CGFloat {
         guard height > 0 else { return 1 }
-        let required = baseHeaderHeight * 2 + baseRowHeight * CGFloat(session.rounds.count)
+        let required = baseHeaderHeight * 2 + baseRowHeight * CGFloat(roundCount)
         return min(1, max(0.55, height / required))
     }
 
     // MARK: - 行
 
-    private func headerRow(scale: CGFloat) -> some View {
+    private func headerRow(players: [String], scale: CGFloat) -> some View {
         HStack(spacing: 0) {
             Text("No")
                 .font(.system(size: 11 * scale, weight: .heavy))
                 .foregroundStyle(Palette.inkDim)
                 .frame(width: noColumnWidth * scale)
-            ForEach(session.players.indices, id: \.self) { column in
-                Text(session.players[column])
+            ForEach(Array(players.enumerated()), id: \.offset) { _, name in
+                Text(name)
                     .font(.system(size: 13 * scale, weight: .heavy))
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1)
@@ -78,35 +90,41 @@ struct ScoreTableView: View {
         .overlay(alignment: .bottom) { hairline }
     }
 
-    private func scoreRow(round: Int, scale: CGFloat) -> some View {
-        let highlight = session.rounds[round].topAndLastColumns
+    private func scoreRow(round: Round, index: Int, decimalMode: Bool, scale: CGFloat) -> some View {
+        let highlight = round.topAndLastColumns
         return HStack(spacing: 0) {
-            Text("\(round + 1)")
+            Text("\(index + 1)")
                 .font(.system(size: 12 * scale, weight: .semibold))
                 .foregroundStyle(Palette.inkDim)
                 .frame(width: noColumnWidth * scale)
                 .frame(maxHeight: .infinity)
                 .background(Palette.bg)
-            ForEach(session.players.indices, id: \.self) { column in
-                cell(round: round, column: column, highlight: highlight, scale: scale)
+            ForEach(Array(round.entries.enumerated()), id: \.offset) { column, entry in
+                cell(
+                    entry: entry,
+                    position: Position(round: index, column: column),
+                    isTop: highlight?.top.contains(column) ?? false,
+                    isLast: highlight?.last.contains(column) ?? false,
+                    decimalMode: decimalMode,
+                    scale: scale
+                )
             }
         }
         .frame(height: baseRowHeight * scale)
         .overlay(alignment: .bottom) { hairline }
     }
 
-    private func totalsRow(scale: CGFloat) -> some View {
-        let totals = session.totals
-        return HStack(spacing: 0) {
+    private func totalsRow(totals: [Int], decimalMode: Bool, scale: CGFloat) -> some View {
+        HStack(spacing: 0) {
             Text("合計")
                 .font(.system(size: 12.5 * scale, weight: .heavy))
                 .foregroundStyle(Palette.inkDim)
                 .frame(width: noColumnWidth * scale)
-            ForEach(totals.indices, id: \.self) { column in
-                Text(ScoreFormatter.string(totals[column], decimalMode: session.decimalMode))
+            ForEach(Array(totals.enumerated()), id: \.offset) { _, total in
+                Text(ScoreFormatter.string(total, decimalMode: decimalMode))
                     .font(.system(size: baseFontSize * scale, weight: .heavy))
                     .monospacedDigit()
-                    .foregroundStyle(totals[column] < 0 ? Palette.negative : Palette.ink)
+                    .foregroundStyle(total < 0 ? Palette.negative : Palette.ink)
                     .frame(maxWidth: .infinity)
             }
         }
@@ -117,15 +135,18 @@ struct ScoreTableView: View {
 
     // MARK: - マス
 
-    private func cell(round: Int, column: Int, highlight: (top: [Int], last: [Int])?, scale: CGFloat) -> some View {
-        let position = Position(round: round, column: column)
-        let entry = session.rounds[round].entries[column]
+    private func cell(
+        entry: Entry,
+        position: Position,
+        isTop: Bool,
+        isLast: Bool,
+        decimalMode: Bool,
+        scale: CGFloat
+    ) -> some View {
         let isSelected = board.selection == position
         let preview = isSelected ? board.pendingValue : nil
-        let isTop = highlight?.top.contains(column) ?? false
-        let isLast = highlight?.last.contains(column) ?? false
 
-        return Text(label(for: entry, preview: preview))
+        return Text(label(for: entry, preview: preview, decimalMode: decimalMode))
             .font(.system(size: baseFontSize * scale, weight: preview != nil ? .heavy : .semibold))
             .monospacedDigit()
             .foregroundStyle(foreground(entry: entry, preview: preview, isTop: isTop, isLast: isLast))
@@ -141,13 +162,13 @@ struct ScoreTableView: View {
             .onTapGesture { board.tap(position) }
     }
 
-    private func label(for entry: Entry, preview: Int?) -> String {
+    private func label(for entry: Entry, preview: Int?, decimalMode: Bool) -> String {
         if let preview {
-            return ScoreFormatter.string(preview, decimalMode: session.decimalMode)
+            return ScoreFormatter.string(preview, decimalMode: decimalMode)
         }
         if entry.isResting { return "－" }
         guard let value = entry.value else { return "·" }
-        return ScoreFormatter.string(value, decimalMode: session.decimalMode)
+        return ScoreFormatter.string(value, decimalMode: decimalMode)
     }
 
     private func foreground(entry: Entry, preview: Int?, isTop: Bool, isLast: Bool) -> Color {
