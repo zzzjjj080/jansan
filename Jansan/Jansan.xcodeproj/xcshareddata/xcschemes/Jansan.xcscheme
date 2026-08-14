@@ -71,7 +71,7 @@
          </BuildableReference>
       </BuildableProductRunnable>
       <StoreKitConfigurationFileReference
-         identifier = "../../../Jansan.storekit">
+         identifier = "../Jansan.storekit">
       </StoreKitConfigurationFileReference>
    </LaunchAction>
    <ProfileAction
