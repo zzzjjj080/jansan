@@ -9,6 +9,7 @@ import JansanCore
 @Observable
 final class ScoreBoard {
     private(set) var session: Session
+    private(set) var roster: Roster
     private(set) var selection: Position?
     private(set) var buffer = ""
     private(set) var isNegative = false
@@ -19,8 +20,9 @@ final class ScoreBoard {
 
     private var confirmTask: Task<Void, Never>?
 
-    init(players: [String]) {
-        session = Session(players: players)
+    init(roster: Roster) {
+        self.roster = roster
+        session = Session(players: roster.activeNames)
     }
 
     var decimalMode: Bool {
@@ -130,6 +132,48 @@ final class ScoreBoard {
         deselect()
     }
 
+    // MARK: - 名簿
+
+    func rename(at index: Int, to name: String) {
+        roster.rename(at: index, to: name)
+        syncPlayers()
+    }
+
+    /// 上限や最後の1人の制約で切り替えられなかった場合は false
+    @discardableResult
+    func toggleActive(at index: Int) -> Bool {
+        let changed = roster.toggleActive(at: index)
+        if changed { syncPlayers() }
+        return changed
+    }
+
+    func addMember() {
+        roster.add(name: "プレイヤー\(roster.members.count + 1)")
+        syncPlayers()
+    }
+
+    func removeMember(at index: Int) {
+        roster.remove(at: index)
+        syncPlayers()
+    }
+
+    func applyPreset(activeCount: Int) {
+        roster.applyPreset(activeCount: activeCount)
+        syncPlayers()
+    }
+
+    func resetSession() {
+        session.reset()
+        deselect()
+    }
+
+    /// 名簿を変えたら列を組み直す。選択中のマスは位置がずれるので解除する
+    private func syncPlayers() {
+        guard !roster.activeNames.isEmpty else { return }
+        session.setPlayers(roster.activeNames)
+        deselect()
+    }
+
     // MARK: - 内部
 
     private func advance(from position: Position) {
@@ -156,4 +200,26 @@ final class ScoreBoard {
     private func haptic() {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
+
+#if DEBUG
+    /// レイアウト検証用。行数と人数が増えたときに表が1画面へ収まるかを確かめるために使う。
+    /// リリースビルドには含まれない
+    func seedDemoRounds(_ count: Int) {
+        let samples = [
+            [-32, 71, -50], [51, -52, 15], [15, -32, 61], [9, -51, 53],
+            [5, 43, -15], [-53, 56, -16], [-23, 67, 20], [-18, -22, 55],
+        ]
+        for round in 0..<count {
+            let scores = samples[round % samples.count]
+            for (column, score) in scores.enumerated() {
+                session.enter(score, at: Position(round: round, column: column))
+            }
+            // 5〜6人打ちは4人目を指定しないと局が閉じない
+            if session.needsWinnerDesignation(at: round) {
+                session.designateWinner(at: Position(round: round, column: 3))
+            }
+        }
+        deselect()
+    }
+#endif
 }

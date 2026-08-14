@@ -2,7 +2,13 @@ import SwiftUI
 import JansanCore
 
 struct ContentView: View {
-    @State private var board = ScoreBoard(players: ["中村", "五十嵐", "斎藤", "佐々木"])
+    @State private var board = ScoreBoard(
+        roster: Roster(
+            names: ["中村", "五十嵐", "斎藤", "佐々木", "石井", "小野寺"],
+            activeCount: 4
+        )
+    )
+    @State private var showSettings = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,6 +23,9 @@ struct ContentView: View {
         }
         .background(Palette.surface)
         .animation(.easeOut(duration: 0.2), value: board.isKeypadVisible)
+        .sheet(isPresented: $showSettings) {
+            SettingsView(board: board)
+        }
     }
 
     private var appBar: some View {
@@ -30,12 +39,23 @@ struct ContentView: View {
                     .foregroundStyle(Palette.inkDim)
             }
             Spacer()
-            // テンキーを閉じたあと開き直すための入口。設定や書き出しは今後ここに並べる
-            if !board.isKeypadVisible {
-                Button("テンキー") { board.isKeypadVisible = true }
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Palette.accent)
+            HStack(spacing: 14) {
+                // テンキーを閉じたあと開き直すための入口
+                if !board.isKeypadVisible {
+                    Button {
+                        board.isKeypadVisible = true
+                    } label: {
+                        Image(systemName: "keyboard")
+                    }
+                }
+                Button {
+                    showSettings = true
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                }
             }
+            .font(.system(size: 17))
+            .foregroundStyle(Palette.accent)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 12)

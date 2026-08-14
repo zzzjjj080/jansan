@@ -14,10 +14,30 @@ struct ScoreTableView: View {
     var body: some View {
         GeometryReader { geometry in
             let scale = fitScale(forHeight: geometry.size.height)
+            // 名前の行と合計の行は常に見えていてほしいので、スクロールするのは中身だけ
+            let chromeHeight = baseHeaderHeight * scale * 2
+            let available = max(0, geometry.size.height - chromeHeight)
+            let required = baseRowHeight * scale * CGFloat(session.rounds.count)
+
             VStack(spacing: 0) {
                 headerRow(scale: scale)
-                ForEach(session.rounds.indices, id: \.self) { round in
-                    scoreRow(round: round, scale: scale)
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical) {
+                        VStack(spacing: 0) {
+                            ForEach(session.rounds.indices, id: \.self) { round in
+                                scoreRow(round: round, scale: scale).id(round)
+                            }
+                        }
+                    }
+                    // 収まるうちは行の分だけの高さにして、合計行を直下に置く
+                    .frame(height: min(available, required))
+                    .onChange(of: board.selection) { _, selection in
+                        guard let selection else { return }
+                        withAnimation { proxy.scrollTo(selection.round, anchor: .center) }
+                    }
+                    .onChange(of: session.rounds.count) { _, count in
+                        withAnimation { proxy.scrollTo(count - 1, anchor: .bottom) }
+                    }
                 }
                 totalsRow(scale: scale)
                 Spacer(minLength: 0)
@@ -28,6 +48,8 @@ struct ScoreTableView: View {
     /// プロトタイプの fitRows の置き換え。
     /// あちらは実際の高さを測りながら --scale を 0.04 ずつ下げるループだったが、
     /// 必要な高さは行数から計算できるので、SwiftUIでは一度で倍率を出せる。
+    ///
+    /// 0.55 より小さくすると数字が読めなくなるので、そこから先は縮めずスクロールに任せる。
     private func fitScale(forHeight height: CGFloat) -> CGFloat {
         guard height > 0 else { return 1 }
         let required = baseHeaderHeight * 2 + baseRowHeight * CGFloat(session.rounds.count)
