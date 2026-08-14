@@ -10,6 +10,8 @@ struct ContentView: View {
     )
     @State private var showSettings = false
     @State private var showHistory = false
+    @State private var showStats = false
+    @State private var showExport = false
     @State private var justSaved = false
     @Environment(\.modelContext) private var context
 
@@ -31,6 +33,12 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showHistory) {
             HistoryView(board: board)
+        }
+        .sheet(isPresented: $showStats) {
+            StatsView(board: board)
+        }
+        .sheet(isPresented: $showExport) {
+            ExportView(board: board)
         }
         .task {
             // 前回の続きがあればここで復元される
@@ -69,6 +77,16 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: "keyboard")
                     }
+                }
+                Button {
+                    showStats = true
+                } label: {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                }
+                Button {
+                    showExport = true
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
                 }
                 Button {
                     board.archiveCurrentGame()

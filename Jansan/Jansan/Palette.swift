@@ -32,6 +32,16 @@ enum Palette {
     static let toneC = adaptive(0xE2_DE_FA, 0x33_2C_55)
     static let toneCInk = adaptive(0x5B_4F_B0, 0xBC_AE_F5)
 
+    /// 推移グラフの線の色。人数ぶん循環させる
+    static let playerColors: [Color] = [
+        adaptive(0x3F_AE_7C, 0x4F_C0_8E),
+        adaptive(0x5B_8F_D6, 0x6F_A2_E6),
+        adaptive(0xE0_A6_40, 0xE8_B6_5C),
+        adaptive(0xD1_63_8F, 0xE0_7A_A4),
+        adaptive(0x4F_B0_C0, 0x63_C2_D2),
+        adaptive(0x9B_7F_E0, 0xAE_94_EE),
+    ]
+
     private static func adaptive(_ light: UInt32, _ dark: UInt32) -> Color {
         Color(uiColor: UIColor { traits in
             UIColor(rgb: traits.userInterfaceStyle == .dark ? dark : light)
