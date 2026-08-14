@@ -9,6 +9,9 @@ struct ContentView: View {
         )
     )
     @State private var showSettings = false
+    @State private var showHistory = false
+    @State private var justSaved = false
+    @Environment(\.modelContext) private var context
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,8 +27,27 @@ struct ContentView: View {
         .background(Palette.surface)
         .animation(.easeOut(duration: 0.2), value: board.isKeypadVisible)
         .sheet(isPresented: $showSettings) {
-            SettingsView(board: board)
+            SettingsView(board: board, showHistory: $showHistory)
         }
+        .sheet(isPresented: $showHistory) {
+            HistoryView(board: board)
+        }
+        .task {
+            // 前回の続きがあればここで復元される
+            board.attach(context: context)
+        }
+        .overlay(alignment: .top) {
+            if justSaved {
+                Text("保存しました")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Palette.accentInk)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                    .background(Palette.accent, in: Capsule())
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: justSaved)
     }
 
     private var appBar: some View {
@@ -47,6 +69,16 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: "keyboard")
                     }
+                }
+                Button {
+                    board.archiveCurrentGame()
+                    justSaved = true
+                    Task {
+                        try? await Task.sleep(for: .seconds(1.6))
+                        justSaved = false
+                    }
+                } label: {
+                    Image(systemName: "square.and.arrow.down")
                 }
                 Button {
                     showSettings = true

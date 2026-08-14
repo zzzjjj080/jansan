@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftData
 import UIKit
 import JansanCore
 
@@ -15,19 +16,105 @@ final class ScoreBoard {
     private(set) var isNegative = false
 
     /// OFFにすると桁数による自動確定をせず、「確定」を押すまで待つ
-    var autoConfirm = true
+    var autoConfirm = true {
+        didSet { scheduleDraftSave() }
+    }
+    /// テンキーの開閉は画面の状態なので保存しない
     var isKeypadVisible = true
 
     private var confirmTask: Task<Void, Never>?
+    private var saveTask: Task<Void, Never>?
+    private var context: ModelContext?
 
     init(roster: Roster) {
         self.roster = roster
         session = Session(players: roster.activeNames)
     }
 
+    // MARK: - 保存
+
+    /// 起動時に一度だけ呼ぶ。前回の続きがあれば復元する
+    func attach(context: ModelContext) {
+        guard self.context == nil else { return }
+        self.context = context
+        restoreDraft()
+    }
+
+    private var snapshot: GameSnapshot {
+        GameSnapshot(roster: roster, session: session, autoConfirm: autoConfirm)
+    }
+
+    private func restoreDraft() {
+        guard let draft = fetchDraft(), let restored = try? draft.snapshot() else { return }
+        guard !restored.roster.activeNames.isEmpty else { return }
+        roster = restored.roster
+        session = restored.session
+        autoConfirm = restored.autoConfirm
+        deselect()
+    }
+
+    private func fetchDraft() -> SavedGame? {
+        let descriptor = FetchDescriptor<SavedGame>(predicate: #Predicate { $0.isDraft })
+        return try? context?.fetch(descriptor).first
+    }
+
+    /// 1マス打つたびに書きに行かないよう、少しまとめてから保存する
+    func scheduleDraftSave() {
+        guard context != nil else { return }
+        saveTask?.cancel()
+        saveTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            self?.saveDraft()
+        }
+    }
+
+    private func saveDraft() {
+        guard let context else { return }
+        let current = snapshot
+        do {
+            if let draft = fetchDraft() {
+                draft.savedAt = .now
+                draft.playerNames = current.session.players
+                draft.totals = current.session.totals
+                draft.decimalMode = current.session.decimalMode
+                draft.payload = try JSONEncoder().encode(current)
+            } else {
+                context.insert(try SavedGame(snapshot: current, isDraft: true))
+            }
+            try context.save()
+        } catch {
+            // 保存に失敗しても入力は続けられるようにする
+            print("下書きの保存に失敗: \(error)")
+        }
+    }
+
+    /// 「保存」で記録として残す。作業中の下書きとは別枠で積まれる
+    func archiveCurrentGame() {
+        guard let context else { return }
+        do {
+            context.insert(try SavedGame(snapshot: snapshot, isDraft: false))
+            try context.save()
+        } catch {
+            print("記録の保存に失敗: \(error)")
+        }
+    }
+
+    func load(_ game: SavedGame) {
+        guard let restored = try? game.snapshot(), !restored.roster.activeNames.isEmpty else { return }
+        roster = restored.roster
+        session = restored.session
+        autoConfirm = restored.autoConfirm
+        deselect()
+        scheduleDraftSave()
+    }
+
     var decimalMode: Bool {
         get { session.decimalMode }
-        set { session.decimalMode = newValue }
+        set {
+            session.decimalMode = newValue
+            scheduleDraftSave()
+        }
     }
 
     /// 入力途中の数字。確定前でも表のマスに薄く表示する
@@ -176,9 +263,11 @@ final class ScoreBoard {
 
     // MARK: - 内部
 
+    // 盤面が動く経路はすべてこの2つのどちらかを通るので、保存のフックはここに置く
     private func advance(from position: Position) {
         if let next = session.nextOpenPosition(after: position) {
             select(next)
+            scheduleDraftSave()
         } else {
             deselect()
         }
@@ -188,6 +277,7 @@ final class ScoreBoard {
     private func deselect() {
         selection = nil
         clearBuffer()
+        scheduleDraftSave()
     }
 
     private func clearBuffer() {

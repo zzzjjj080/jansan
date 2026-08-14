@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct JansanApp: App {
@@ -13,5 +14,6 @@ struct JansanApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: SavedGame.self)
     }
 }

@@ -3,6 +3,7 @@ import JansanCore
 
 struct SettingsView: View {
     let board: ScoreBoard
+    @Binding var showHistory: Bool
     @Environment(\.dismiss) private var dismiss
 
     @State private var limitAlert = false
@@ -131,7 +132,13 @@ struct SettingsView: View {
 
     private var dangerSection: some View {
         Section {
+            Button("保存した記録を見る") {
+                dismiss()
+                showHistory = true
+            }
             Button("新規セッションにする", role: .destructive) { resetConfirm = true }
+        } footer: {
+            Text("入力中の内容は自動で保存されるので、アプリを閉じても続きから再開できます。「保存した記録」は別枠で、残したい対局を明示的に残すためのものです。")
         }
     }
 
