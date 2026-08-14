@@ -26,6 +26,24 @@ final class ScoreBoard {
     private var saveTask: Task<Void, Never>?
     private var context: ModelContext?
 
+    /// 直前の盤面。自動確定が速いぶん打ち間違いも即座に確定するので、1手戻せるようにしておく
+    private var undoStack: [Session] = []
+    private let undoLimit = 30
+
+    var canUndo: Bool { !undoStack.isEmpty }
+
+    private func recordUndo() {
+        undoStack.append(session)
+        if undoStack.count > undoLimit { undoStack.removeFirst() }
+    }
+
+    func undo() {
+        guard let previous = undoStack.popLast() else { return }
+        session = previous
+        haptic()
+        deselect()
+    }
+
     init(roster: Roster) {
         self.roster = roster
         session = Session(players: roster.activeNames)
@@ -148,6 +166,7 @@ final class ScoreBoard {
             commit()
         }
         if session.canDesignateWinner(at: position) {
+            recordUndo()
             session.designateWinner(at: position)
             haptic()
             advance(from: position)
@@ -203,6 +222,7 @@ final class ScoreBoard {
 
     func pressRest() {
         guard let position = selection else { return }
+        recordUndo()
         session.toggleResting(at: position)
         haptic()
         advance(from: position)
@@ -211,6 +231,7 @@ final class ScoreBoard {
     func commit() {
         guard let position = selection, let value = pendingValue else { return }
         confirmTask?.cancel()
+        recordUndo()
         session.enter(value, at: position)
         haptic()
 
@@ -257,7 +278,16 @@ final class ScoreBoard {
         syncPlayers()
     }
 
+    /// 表の行そのものを消す。入れ間違えた局の取り消し用
+    func removeRound(at index: Int) {
+        recordUndo()
+        session.removeRound(at: index)
+        haptic()
+        deselect()
+    }
+
     func resetSession() {
+        recordUndo()
         session.reset()
         deselect()
     }

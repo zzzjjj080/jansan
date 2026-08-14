@@ -4,8 +4,12 @@ import JansanCore
 struct ScoreTableView: View {
     let board: ScoreBoard
 
+    /// Noをタップした局。確認してから消す
+    @State private var pendingRemoval: Int?
+
     private let baseRowHeight: CGFloat = 34
     private let baseHeaderHeight: CGFloat = 30
+    private let baseRankHeight: CGFloat = 22
     private let baseFontSize: CGFloat = 14.5
     private let noColumnWidth: CGFloat = 30
 
@@ -18,8 +22,8 @@ struct ScoreTableView: View {
 
         GeometryReader { geometry in
             let scale = fitScale(roundCount: session.rounds.count, height: geometry.size.height)
-            // 名前の行と合計の行は常に見えていてほしいので、スクロールするのは中身だけ
-            let chrome = baseHeaderHeight * scale * 2
+            // 名前・合計・順位の行は常に見えていてほしいので、スクロールするのは中身だけ
+            let chrome = (baseHeaderHeight * 2 + baseRankHeight) * scale
             let available = max(0, geometry.size.height - chrome)
             let required = baseRowHeight * scale * CGFloat(session.rounds.count)
 
@@ -52,8 +56,25 @@ struct ScoreTableView: View {
                 }
 
                 totalsRow(totals: session.totals, decimalMode: session.decimalMode, scale: scale)
+                rankingRow(rankings: session.rankings(), scale: scale)
                 Spacer(minLength: 0)
             }
+        }
+        .confirmationDialog(
+            pendingRemoval.map { "\($0 + 1)局目を削除しますか" } ?? "",
+            isPresented: Binding(
+                get: { pendingRemoval != nil },
+                set: { if !$0 { pendingRemoval = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("この局を削除", role: .destructive) {
+                if let index = pendingRemoval { board.removeRound(at: index) }
+                pendingRemoval = nil
+            }
+            Button("キャンセル", role: .cancel) { pendingRemoval = nil }
+        } message: {
+            Text("以降の局が繰り上がります。消したあとでも、テンキー上部の取り消しボタンで戻せます。")
         }
     }
 
@@ -64,7 +85,7 @@ struct ScoreTableView: View {
     /// 0.55 より小さくすると数字が読めなくなるので、そこから先は縮めずスクロールに任せる。
     private func fitScale(roundCount: Int, height: CGFloat) -> CGFloat {
         guard height > 0 else { return 1 }
-        let required = baseHeaderHeight * 2 + baseRowHeight * CGFloat(roundCount)
+        let required = baseHeaderHeight * 2 + baseRankHeight + baseRowHeight * CGFloat(roundCount)
         return min(1, max(0.55, height / required))
     }
 
@@ -93,12 +114,15 @@ struct ScoreTableView: View {
     private func scoreRow(round: Round, index: Int, decimalMode: Bool, scale: CGFloat) -> some View {
         let highlight = round.topAndLastColumns
         return HStack(spacing: 0) {
+            // 局番号は行の取っ手も兼ねる。タップすると削除の確認が出る
             Text("\(index + 1)")
                 .font(.system(size: 12 * scale, weight: .semibold))
                 .foregroundStyle(Palette.inkDim)
                 .frame(width: noColumnWidth * scale)
                 .frame(maxHeight: .infinity)
                 .background(Palette.bg)
+                .contentShape(Rectangle())
+                .onTapGesture { pendingRemoval = index }
             ForEach(Array(round.entries.enumerated()), id: \.offset) { column, entry in
                 cell(
                     entry: entry,
@@ -131,6 +155,29 @@ struct ScoreTableView: View {
         .frame(height: baseHeaderHeight * scale)
         .background(Palette.surface2)
         .overlay(alignment: .top) { hairline }
+    }
+
+    /// 今の合計での順位。対局中に一番よく聞かれる「今トップは誰か」に答えるための行
+    private func rankingRow(rankings: [Int], scale: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            Text("順位")
+                .font(.system(size: 10.5 * scale, weight: .bold))
+                .foregroundStyle(Palette.inkDim)
+                .frame(width: noColumnWidth * scale)
+            ForEach(Array(rankings.enumerated()), id: \.offset) { _, rank in
+                Text("\(rank)")
+                    .font(.system(size: 11.5 * scale, weight: .heavy))
+                    .monospacedDigit()
+                    .foregroundStyle(rank == 1 ? Palette.accentInk : Palette.inkDim)
+                    .frame(minWidth: 17 * scale, minHeight: 17 * scale)
+                    .background {
+                        if rank == 1 { Circle().fill(Palette.accent) }
+                    }
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .frame(height: baseRankHeight * scale)
+        .background(Palette.surface2)
     }
 
     // MARK: - マス
