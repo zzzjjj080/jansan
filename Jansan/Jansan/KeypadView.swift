@@ -61,35 +61,17 @@ struct KeypadView: View {
         }
     }
 
-    /// 打つ前は選択中の人の名前、打ち始めたら入力中の数字。
-    /// 自動確定が速いぶん打ち間違いも即確定するので、取り消しを同じ行に置く
+    /// 打つ前は選択中の人の名前、打ち始めたら入力中の数字
     private var caption: some View {
-        ZStack {
-            Text(board.keypadCaption)
-                .font(.system(
-                    size: board.isCaptionPlaceholder ? 13 : 24,
-                    weight: board.isCaptionPlaceholder ? .semibold : .heavy
-                ))
-                .monospacedDigit()
-                .foregroundStyle(captionColor)
-                .frame(maxWidth: .infinity)
-
-            HStack {
-                Button {
-                    board.undo()
-                } label: {
-                    Label("取り消し", systemImage: "arrow.uturn.backward")
-                        .labelStyle(.iconOnly)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(board.canUndo ? Palette.toneBInk : Palette.inkDim.opacity(0.35))
-                        .frame(width: 44, height: 30)
-                        .contentShape(Rectangle())
-                }
-                .disabled(!board.canUndo)
-                Spacer()
-            }
-        }
-        .frame(minHeight: 30)
+        Text(board.keypadCaption)
+            .font(.system(
+                size: board.isCaptionPlaceholder ? 13 : 24,
+                weight: board.isCaptionPlaceholder ? .semibold : .heavy
+            ))
+            .monospacedDigit()
+            .foregroundStyle(captionColor)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: 30)
     }
 
     private var captionColor: Color {

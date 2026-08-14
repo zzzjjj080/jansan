@@ -9,7 +9,6 @@ struct ScoreTableView: View {
 
     private let baseRowHeight: CGFloat = 34
     private let baseHeaderHeight: CGFloat = 30
-    private let baseRankHeight: CGFloat = 22
     private let baseFontSize: CGFloat = 14.5
     private let noColumnWidth: CGFloat = 30
 
@@ -22,8 +21,8 @@ struct ScoreTableView: View {
 
         GeometryReader { geometry in
             let scale = fitScale(roundCount: session.rounds.count, height: geometry.size.height)
-            // 名前・合計・順位の行は常に見えていてほしいので、スクロールするのは中身だけ
-            let chrome = (baseHeaderHeight * 2 + baseRankHeight) * scale
+            // 名前の行と合計の行は常に見えていてほしいので、スクロールするのは中身だけ
+            let chrome = baseHeaderHeight * scale * 2
             let available = max(0, geometry.size.height - chrome)
             let required = baseRowHeight * scale * CGFloat(session.rounds.count)
 
@@ -56,7 +55,6 @@ struct ScoreTableView: View {
                 }
 
                 totalsRow(totals: session.totals, decimalMode: session.decimalMode, scale: scale)
-                rankingRow(rankings: session.rankings(), scale: scale)
                 Spacer(minLength: 0)
             }
         }
@@ -74,7 +72,7 @@ struct ScoreTableView: View {
             }
             Button("キャンセル", role: .cancel) { pendingRemoval = nil }
         } message: {
-            Text("以降の局が繰り上がります。消したあとでも、テンキー上部の取り消しボタンで戻せます。")
+            Text("以降の局が繰り上がります。この操作は元に戻せません。")
         }
     }
 
@@ -85,7 +83,7 @@ struct ScoreTableView: View {
     /// 0.55 より小さくすると数字が読めなくなるので、そこから先は縮めずスクロールに任せる。
     private func fitScale(roundCount: Int, height: CGFloat) -> CGFloat {
         guard height > 0 else { return 1 }
-        let required = baseHeaderHeight * 2 + baseRankHeight + baseRowHeight * CGFloat(roundCount)
+        let required = baseHeaderHeight * 2 + baseRowHeight * CGFloat(roundCount)
         return min(1, max(0.55, height / required))
     }
 
@@ -155,29 +153,6 @@ struct ScoreTableView: View {
         .frame(height: baseHeaderHeight * scale)
         .background(Palette.surface2)
         .overlay(alignment: .top) { hairline }
-    }
-
-    /// 今の合計での順位。対局中に一番よく聞かれる「今トップは誰か」に答えるための行
-    private func rankingRow(rankings: [Int], scale: CGFloat) -> some View {
-        HStack(spacing: 0) {
-            Text("順位")
-                .font(.system(size: 10.5 * scale, weight: .bold))
-                .foregroundStyle(Palette.inkDim)
-                .frame(width: noColumnWidth * scale)
-            ForEach(Array(rankings.enumerated()), id: \.offset) { _, rank in
-                Text("\(rank)")
-                    .font(.system(size: 11.5 * scale, weight: .heavy))
-                    .monospacedDigit()
-                    .foregroundStyle(rank == 1 ? Palette.accentInk : Palette.inkDim)
-                    .frame(minWidth: 17 * scale, minHeight: 17 * scale)
-                    .background {
-                        if rank == 1 { Circle().fill(Palette.accent) }
-                    }
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .frame(height: baseRankHeight * scale)
-        .background(Palette.surface2)
     }
 
     // MARK: - マス

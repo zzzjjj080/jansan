@@ -141,14 +141,6 @@ public struct Session: Equatable, Sendable, Codable {
         appendRoundIfNeeded()
     }
 
-    /// 合計点による順位。同点は同じ順位になり、その次の順位は人数分飛ぶ(1,2,2,4)
-    public func rankings() -> [Int] {
-        let totals = self.totals
-        return totals.map { value in
-            totals.filter { $0 > value }.count + 1
-        }
-    }
-
     /// 全リセット(新規セッション)
     public mutating func reset() {
         rounds = [Round(playerCount: players.count)]

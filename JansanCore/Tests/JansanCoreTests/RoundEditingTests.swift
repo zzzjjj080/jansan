@@ -63,32 +63,3 @@ struct RemoveRoundTests {
         #expect(session.rounds == before)
     }
 }
-
-@Suite("順位")
-struct RankingTests {
-
-    @Test("合計点の高い順に1位から並ぶ")
-    func ordersByTotal() {
-        var session = Session(players: yonma)
-        session.enter(-32, at: Position(round: 0, column: 0))
-        session.enter(71, at: Position(round: 0, column: 1))
-        session.enter(-50, at: Position(round: 0, column: 2))
-        // 合計: -32, 71, -50, 11
-        #expect(session.rankings() == [3, 1, 4, 2])
-    }
-
-    @Test("同点は同じ順位になり、次の順位が飛ぶ")
-    func sharesRankOnTie() {
-        var session = Session(players: yonma)
-        session.enter(30, at: Position(round: 0, column: 0))
-        session.enter(0, at: Position(round: 0, column: 1))
-        session.enter(0, at: Position(round: 0, column: 2))
-        // 合計: 30, 0, 0, -30
-        #expect(session.rankings() == [1, 2, 2, 4])
-    }
-
-    @Test("何も入力していなければ全員1位")
-    func allTiedWhenEmpty() {
-        #expect(Session(players: yonma).rankings() == [1, 1, 1, 1])
-    }
-}
