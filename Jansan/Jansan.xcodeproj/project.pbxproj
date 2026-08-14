@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		3CC6F5A2302EF33A0082AA0B /* JansanCore in Frameworks */ = {isa = PBXBuildFile; productRef = 3CC6F5A1302EF33A0082AA0B /* JansanCore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		3CC6F49B302EF33A0082AA0B /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3CC6F5A2302EF33A0082AA0B /* JansanCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = Jansan;
 			packageProductDependencies = (
+				3CC6F5A1302EF33A0082AA0B /* JansanCore */,
 			);
 			productName = Jansan;
 			productReference = 3CC6F48D302EF3390082AA0B /* Jansan.app */;
@@ -195,6 +201,9 @@
 			);
 			mainGroup = 3CC6F484302EF3390082AA0B;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				3CC6F5A0302EF33A0082AA0B /* XCLocalSwiftPackageReference "../JansanCore" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3CC6F48E302EF3390082AA0B /* Products */;
 			projectDirPath = "";
@@ -605,6 +614,20 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		3CC6F5A0302EF33A0082AA0B /* XCLocalSwiftPackageReference "../JansanCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../JansanCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		3CC6F5A1302EF33A0082AA0B /* JansanCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = JansanCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 3CC6F485302EF3390082AA0B /* Project object */;
 }
