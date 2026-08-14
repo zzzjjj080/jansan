@@ -22,6 +22,7 @@ final class ScoreBoard {
     /// テンキーの開閉は画面の状態なので保存しない
     var isKeypadVisible = true
 
+    private let haptics = Haptics()
     private var confirmTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
     private var context: ModelContext?
@@ -149,7 +150,7 @@ final class ScoreBoard {
         }
         if session.canDesignateWinner(at: position) {
             session.designateWinner(at: position)
-            haptic()
+            haptics.confirm()
             advance(from: position)
         } else {
             select(position)
@@ -160,6 +161,8 @@ final class ScoreBoard {
         selection = position
         clearBuffer()
         isKeypadVisible = true
+        // 打ち始める直前に温めておくと、1打目から取りこぼさない
+        haptics.warmUp()
     }
 
     // MARK: - テンキー
@@ -172,7 +175,7 @@ final class ScoreBoard {
         guard buffer.count < maxLength else { return }
 
         buffer.append(digit)
-        haptic()
+        haptics.tap()
         confirmTask?.cancel()
         guard autoConfirm else { return }
 
@@ -191,20 +194,20 @@ final class ScoreBoard {
     func pressMinus() {
         guard selection != nil else { return }
         isNegative.toggle()
-        haptic()
+        haptics.tap()
     }
 
     func pressBackspace() {
         guard selection != nil, !buffer.isEmpty else { return }
         confirmTask?.cancel()
         buffer.removeLast()
-        haptic()
+        haptics.tap()
     }
 
     func pressRest() {
         guard let position = selection else { return }
         session.toggleResting(at: position)
-        haptic()
+        haptics.confirm()
         advance(from: position)
     }
 
@@ -212,7 +215,7 @@ final class ScoreBoard {
         guard let position = selection, let value = pendingValue else { return }
         confirmTask?.cancel()
         session.enter(value, at: position)
-        haptic()
+        haptics.confirm()
 
         // 5〜6人打ちで誰が4人目か未確定のときだけ、タップでの指定を待つ
         if session.needsWinnerDesignation(at: position.round) {
@@ -260,7 +263,7 @@ final class ScoreBoard {
     /// 表の行そのものを消す。入れ間違えた局の取り消し用
     func removeRound(at index: Int) {
         session.removeRound(at: index)
-        haptic()
+        haptics.confirm()
         deselect()
     }
 
@@ -301,10 +304,8 @@ final class ScoreBoard {
         isNegative = false
     }
 
-    /// Web版のVibration APIはiOSで動かなかったが、実機アプリではこれが正解
-    private func haptic() {
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-    }
+    /// Web版のVibration APIはiOSで動かなかったが、実機アプリではこれが正解。
+    /// 強さの使い分けは Haptics 側に持たせている
 
 #if DEBUG
     /// レイアウト検証用。行数と人数が増えたときに表が1画面へ収まるかを確かめるために使う。
