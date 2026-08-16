@@ -4,6 +4,7 @@ import JansanCore
 struct SettingsView: View {
     let board: ScoreBoard
     @Binding var showHistory: Bool
+    @Binding var appTheme: AppTheme
     @Environment(\.dismiss) private var dismiss
 
     @State private var tipJar = TipJar()
@@ -11,15 +12,17 @@ struct SettingsView: View {
     @State private var limitAlert = false
     @State private var pendingDeletion: Int?
     @State private var resetConfirm = false
+    @State private var pendingDeactivation: Int?
 
     var body: some View {
         NavigationStack {
             Form {
+                newSessionSection
                 membersSection
                 presetsSection
                 inputSection
+                appearanceSection
                 recordSection
-                dangerSection
                 tipSection
 #if DEBUG
                 debugSection
@@ -46,11 +49,33 @@ struct SettingsView: View {
                     Text("「\(board.roster.members[index].name)」を名簿から完全に削除します。")
                 }
             }
-            .alert("新規セッションにしますか", isPresented: $resetConfirm) {
-                Button("キャンセル", role: .cancel) {}
-                Button("リセット", role: .destructive) { board.resetSession() }
+            .confirmationDialog("新規セッションにしますか", isPresented: $resetConfirm, titleVisibility: .visible) {
+                Button("記録に残してから始める") {
+                    board.archiveCurrentGame()
+                    board.resetSession()
+                }
+                Button("記録に残さず始める", role: .destructive) {
+                    board.resetSession()
+                }
+                Button("やめる", role: .cancel) {}
             } message: {
-                Text("現在の入力内容はすべて消えます。")
+                Text("いまの表は消えます。あとで見返したい対局なら、残してから始めてください。")
+            }
+            .confirmationDialog(
+                pendingDeactivation.map { "「\(board.roster.members[$0].name)」を今回の参加から外しますか" } ?? "",
+                isPresented: Binding(
+                    get: { pendingDeactivation != nil },
+                    set: { if !$0 { pendingDeactivation = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("外す（点数は消えます）", role: .destructive) {
+                    if let index = pendingDeactivation { board.toggleActive(at: index) }
+                    pendingDeactivation = nil
+                }
+                Button("やめる", role: .cancel) { pendingDeactivation = nil }
+            } message: {
+                Text("この人には入力済みの点数があります。外すと表から列ごと消えます。")
             }
         }
     }
@@ -77,7 +102,12 @@ struct SettingsView: View {
     private func memberRow(_ index: Int) -> some View {
         HStack(spacing: 12) {
             Button {
-                if !board.toggleActive(at: index) { limitAlert = true }
+                // 入力済みの人を外すと点数ごと消えるので、そのときだけ確認する
+                if board.roster.members[index].isActive, board.hasEntries(memberIndex: index) {
+                    pendingDeactivation = index
+                } else if !board.toggleActive(at: index) {
+                    limitAlert = true
+                }
             } label: {
                 Image(systemName: board.roster.members[index].isActive ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(board.roster.members[index].isActive ? Palette.accent : Palette.inkDim)
@@ -162,9 +192,30 @@ struct SettingsView: View {
         }
     }
 
-    private var dangerSection: some View {
+    private var newSessionSection: some View {
         Section {
-            Button("新規セッションにする", role: .destructive) { resetConfirm = true }
+            Button {
+                resetConfirm = true
+            } label: {
+                Label("新規セッションにする", systemImage: "arrow.clockwise")
+            }
+        } footer: {
+            Text("いまの対局を終えて、次の半荘を始めるときに使います。")
+        }
+    }
+
+    private var appearanceSection: some View {
+        Section {
+            Picker("表示", selection: $appTheme) {
+                ForEach(AppTheme.allCases) { theme in
+                    Text(theme.label).tag(theme)
+                }
+            }
+            .pickerStyle(.segmented)
+        } header: {
+            Text("見た目")
+        } footer: {
+            Text("「端末に合わせる」はiPhoneのライト/ダーク設定に従います。暗い場所で打つときはダーク固定が読みやすいことがあります。")
         }
     }
 

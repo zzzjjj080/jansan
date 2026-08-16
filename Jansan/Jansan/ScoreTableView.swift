@@ -111,14 +111,16 @@ struct ScoreTableView: View {
 
     private func scoreRow(round: Round, index: Int, decimalMode: Bool, scale: CGFloat) -> some View {
         let highlight = round.topAndLastColumns
+        let isUnbalanced = round.isUnbalanced
         return HStack(spacing: 0) {
             // 局番号は行の取っ手も兼ねる。タップすると削除の確認が出る
-            Text("\(index + 1)")
-                .font(.system(size: 12 * scale, weight: .semibold))
-                .foregroundStyle(Palette.inkDim)
+            // 合計が0にならない局は番号を赤くして知らせる
+            Text(isUnbalanced ? "!" : "\(index + 1)")
+                .font(.system(size: 12 * scale, weight: isUnbalanced ? .heavy : .semibold))
+                .foregroundStyle(isUnbalanced ? Palette.negative : Palette.inkDim)
                 .frame(width: noColumnWidth * scale)
                 .frame(maxHeight: .infinity)
-                .background(Palette.bg)
+                .background(isUnbalanced ? Palette.lastTint : Palette.bg)
                 .contentShape(Rectangle())
                 .onTapGesture { pendingRemoval = index }
             ForEach(Array(round.entries.enumerated()), id: \.offset) { column, entry in

@@ -44,6 +44,15 @@ public struct Round: Equatable, Sendable, Codable {
         entries[open[0]] = .derived(-sum)
     }
 
+    /// 全員確定しているのに合計が0になっていない状態。
+    /// 逆算に頼らず4人ぶんすべて手で入れたときに起こりうる
+    public var isUnbalanced: Bool {
+        guard isComplete else { return false }
+        let values = playingColumns.compactMap { entries[$0].value }
+        guard !values.isEmpty else { return false }
+        return values.reduce(0, +) != 0
+    }
+
     /// 全員確定した局のトップ/ラスの列。全員同点なら色分けしないのでnilを返す。
     public var topAndLastColumns: (top: [Int], last: [Int])? {
         let playing = playingColumns

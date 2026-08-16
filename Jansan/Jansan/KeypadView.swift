@@ -41,7 +41,14 @@ struct KeypadView: View {
                     }
                     HStack(spacing: spacing) {
                         digitKey("0")
-                        key("⌫", background: Palette.toneB, foreground: Palette.toneBInk, size: 17, weight: .bold) {
+                        // 入力中の数字が無いときは、マスの中身そのものを消す役割になる
+                        key(
+                            board.backspaceClearsCell ? "クリア" : "⌫",
+                            background: board.backspaceClearsCell ? Palette.lastTint : Palette.toneB,
+                            foreground: board.backspaceClearsCell ? Palette.negative : Palette.toneBInk,
+                            size: board.backspaceClearsCell ? 13.5 : 17,
+                            weight: .bold
+                        ) {
                             board.pressBackspace()
                         }
                         key("閉じる", background: Palette.toneC, foreground: Palette.toneCInk, size: 13.5, weight: .heavy) {

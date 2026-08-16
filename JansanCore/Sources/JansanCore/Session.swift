@@ -130,6 +130,14 @@ public struct Session: Equatable, Sendable, Codable {
         appendRoundIfNeeded()
     }
 
+    /// 1マスだけ空に戻す。他の3人が埋まっていれば、そのマスは自動で逆算し直される
+    public mutating func clear(at position: Position) {
+        guard rounds.indices.contains(position.round),
+              rounds[position.round].entries.indices.contains(position.column) else { return }
+        rounds[position.round].entries[position.column] = .empty
+        rounds[position.round].recompute()
+    }
+
     /// 打っていない局を消す。1局しか無い場合は行ごと消さず中身だけ空にする
     public mutating func removeRound(at index: Int) {
         guard rounds.indices.contains(index) else { return }

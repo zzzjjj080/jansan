@@ -197,11 +197,28 @@ final class ScoreBoard {
         haptics.tap()
     }
 
+    /// ⌫ の二段構え。入力中の数字があればそれを1桁消し、無ければマスの中身を消す。
+    /// 消したマスは、他の3人が埋まっていれば自動で逆算し直される
     func pressBackspace() {
-        guard selection != nil, !buffer.isEmpty else { return }
+        guard let position = selection else { return }
         confirmTask?.cancel()
-        buffer.removeLast()
-        haptics.tap()
+
+        if !buffer.isEmpty {
+            buffer.removeLast()
+            haptics.tap()
+            return
+        }
+        guard session.rounds[position.round].entries[position.column] != .empty else { return }
+        session.clear(at: position)
+        isNegative = false
+        haptics.confirm()
+        scheduleDraftSave()
+    }
+
+    /// ⌫ を押したときにマスの中身が消える状態かどうか。ボタンの表示を変えるのに使う
+    var backspaceClearsCell: Bool {
+        guard let position = selection, buffer.isEmpty else { return false }
+        return session.rounds[position.round].entries[position.column] != .empty
     }
 
     func pressRest() {
@@ -235,6 +252,17 @@ final class ScoreBoard {
     func rename(at index: Int, to name: String) {
         roster.rename(at: index, to: name)
         syncPlayers()
+    }
+
+    /// そのメンバーに入力済みの点数やお休みがあるか。外す前の確認に使う
+    func hasEntries(memberIndex: Int) -> Bool {
+        guard roster.members.indices.contains(memberIndex) else { return false }
+        let name = roster.members[memberIndex].name
+        guard let column = session.players.firstIndex(of: name) else { return false }
+        return session.rounds.contains { round in
+            let entry = round.entries[column]
+            return entry.value != nil || entry.isResting
+        }
     }
 
     /// 上限や最後の1人の制約で切り替えられなかった場合は false
@@ -315,6 +343,9 @@ final class ScoreBoard {
             [-32, 71, -50], [51, -52, 15], [15, -32, 61], [9, -51, 53],
             [5, 43, -15], [-53, 56, -16], [-23, 67, 20], [-18, -22, 55],
         ]
+        // 既存の表に重ねると、4列目に前のデータが手入力として残って
+        // 合計が0にならない行ができてしまう。まっさらにしてから入れる
+        session.reset()
         let playerCount = session.players.count
         for round in 0..<count {
             let scores = samples[round % samples.count]

@@ -9,6 +9,7 @@ struct ContentView: View {
             activeCount: 4
         )
     )
+    @AppStorage("appTheme") private var appTheme = AppTheme.system
     @State private var showSettings = false
     @State private var showHistory = false
     @State private var showStats = false
@@ -27,9 +28,10 @@ struct ContentView: View {
             }
         }
         .background(Palette.surface)
+        .preferredColorScheme(appTheme.colorScheme)
         .animation(.easeOut(duration: 0.2), value: board.isKeypadVisible)
         .sheet(isPresented: $showSettings) {
-            SettingsView(board: board, showHistory: $showHistory)
+            SettingsView(board: board, showHistory: $showHistory, appTheme: $appTheme)
         }
         .sheet(isPresented: $showHistory) {
             HistoryView(board: board)

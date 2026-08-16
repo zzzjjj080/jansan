@@ -25,7 +25,9 @@ struct StatsView: View {
                         .padding(.top, 40)
                     } else {
                         heading("着順・成績")
-                        rankTable
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            rankTable
+                        }
                         heading("推移（累計点数）")
                         trendChart
                         legend
@@ -80,8 +82,10 @@ struct StatsView: View {
                         .font(.system(size: 12.5, weight: .bold))
                         .foregroundStyle(Palette.ink)
                         .lineLimit(1)
+                        // 「五十嵐」が「五…」に潰れないよう、名前は縮めない
+                        .fixedSize(horizontal: true, vertical: false)
                         .gridColumnAlignment(.leading)
-                        .padding(.trailing, 8)
+                        .padding(.trailing, 10)
 
                     Text(ScoreFormatter.string(stat.total, decimalMode: session.decimalMode))
                         .font(.system(size: 12.5, weight: .semibold))
