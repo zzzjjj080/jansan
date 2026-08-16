@@ -5,8 +5,10 @@ import Foundation
 // App Store用のスクリーンショットを組む使い捨てスクリプト。
 // 生のスクリーンショットの上にキャプションを載せ、6.9インチ(1320x2868)に収める。
 
-let width = 1320.0
-let height = 2868.0
+// 既定は6.9インチ(1320x2868)。第3・第4引数で他のサイズにも出せる
+let width = CommandLine.arguments.count > 3 ? Double(CommandLine.arguments[3])! : 1320.0
+let height = CommandLine.arguments.count > 4 ? Double(CommandLine.arguments[4])! : 2868.0
+let uiScale = width / 1320.0
 
 struct Shot {
     let file: String
@@ -69,7 +71,7 @@ for shot in shots {
         width: shotWidth,
         height: shotHeight
     )
-    let clip = CGPath(roundedRect: shotRect, cornerWidth: 56, cornerHeight: 56, transform: nil)
+    let clip = CGPath(roundedRect: shotRect, cornerWidth: 56 * uiScale, cornerHeight: 56 * uiScale, transform: nil)
 
     context.saveGState()
     context.setShadow(
@@ -98,20 +100,20 @@ for shot in shots {
 
     let title = shot.title as NSString
     let titleAttributes: [NSAttributedString.Key: Any] = [
-        .font: NSFont(name: "HiraginoSans-W7", size: 84) ?? NSFont.systemFont(ofSize: 84, weight: .bold),
+        .font: NSFont(name: "HiraginoSans-W7", size: 84 * uiScale) ?? NSFont.systemFont(ofSize: 84 * uiScale, weight: .bold),
         .foregroundColor: NSColor(cgColor: color(0x1F5C43))!,
         .paragraphStyle: paragraph,
     ]
-    let titleBox = CGRect(x: 70, y: height - 400, width: width - 140, height: 200)
+    let titleBox = CGRect(x: 70 * uiScale, y: height - 400 * uiScale, width: width - 140 * uiScale, height: 200 * uiScale)
     title.draw(in: titleBox, withAttributes: titleAttributes)
 
     let subtitle = shot.subtitle as NSString
     let subtitleAttributes: [NSAttributedString.Key: Any] = [
-        .font: NSFont(name: "HiraginoSans-W3", size: 44) ?? NSFont.systemFont(ofSize: 44),
+        .font: NSFont(name: "HiraginoSans-W3", size: 44 * uiScale) ?? NSFont.systemFont(ofSize: 44 * uiScale),
         .foregroundColor: NSColor(cgColor: color(0x5A6B5F))!,
         .paragraphStyle: paragraph,
     ]
-    let subtitleBox = CGRect(x: 80, y: height - 500, width: width - 160, height: 120)
+    let subtitleBox = CGRect(x: 80 * uiScale, y: height - 500 * uiScale, width: width - 160 * uiScale, height: 120 * uiScale)
     subtitle.draw(in: subtitleBox, withAttributes: subtitleAttributes)
 
     NSGraphicsContext.restoreGraphicsState()
