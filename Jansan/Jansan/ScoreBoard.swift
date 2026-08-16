@@ -158,6 +158,9 @@ final class ScoreBoard {
     }
 
     func select(_ position: Position) {
+        // ここでは計算し直さない。
+        // 選び直すたびに逆算すると、逆算で入っていた別のマスが未知数2つ扱いになって
+        // 巻き添えで消える。クリアしたマスは、次に点数を確定するまで空のままにしておく
         selection = position
         clearBuffer()
         isKeypadVisible = true
@@ -198,7 +201,8 @@ final class ScoreBoard {
     }
 
     /// ⌫ の二段構え。入力中の数字があればそれを1桁消し、無ければマスの中身を消す。
-    /// 消したマスは、他の3人が埋まっていれば自動で逆算し直される
+    /// 消えるのは選んだマスだけで、他のマスには一切触らない。
+    /// 空いたマスは、次にどこかへ点数を確定した時点で逆算し直される
     func pressBackspace() {
         guard let position = selection else { return }
         confirmTask?.cancel()

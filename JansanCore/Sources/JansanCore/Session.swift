@@ -130,12 +130,22 @@ public struct Session: Equatable, Sendable, Codable {
         appendRoundIfNeeded()
     }
 
-    /// 1マスだけ空に戻す。他の3人が埋まっていれば、そのマスは自動で逆算し直される
+    /// 指定した1マスだけを空に戻す。
+    ///
+    /// ここでは意図的に再計算しない。消した直後に逆算が走ると、
+    /// 消したはずのマスが即座に埋め直されたり、逆算で入っていた別のマスが
+    /// 巻き添えで消えたりして、「どれを消したのか」が分からなくなるため。
+    /// 計算し直しは recomputeRound(at:) を呼ぶ側のタイミングに任せる。
     public mutating func clear(at position: Position) {
         guard rounds.indices.contains(position.round),
               rounds[position.round].entries.indices.contains(position.column) else { return }
         rounds[position.round].entries[position.column] = .empty
-        rounds[position.round].recompute()
+    }
+
+    /// その局を計算し直す。マスを選び直したときに呼ぶ
+    public mutating func recomputeRound(at index: Int) {
+        guard rounds.indices.contains(index) else { return }
+        rounds[index].recompute()
     }
 
     /// 打っていない局を消す。1局しか無い場合は行ごと消さず中身だけ空にする

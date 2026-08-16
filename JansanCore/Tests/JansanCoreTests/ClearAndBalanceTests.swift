@@ -24,15 +24,32 @@ struct ClearTests {
         #expect(session.rounds[0].entries[0] == .empty)
     }
 
-    @Test("クリアした結果、他の3人が埋まっていればそのマスが逆算される")
-    func clearedCellBecomesDerived() {
+    @Test("クリアは選んだマス以外に触らない")
+    func clearTouchesOnlySelectedCell() {
+        var session = filledRound()
+        // 4人目は逆算で入っている状態
+        #expect(session.rounds[0].entries[3] == .derived(11))
+
+        session.clear(at: Position(round: 0, column: 0))
+        // 消したのは1人目だけ。逆算で入っていた4人目は巻き添えにしない
+        #expect(session.rounds[0].entries[0] == .empty)
+        #expect(session.rounds[0].entries[3] == .derived(11))
+        #expect(session.rounds[0].entries[1] == .entered(71))
+        #expect(session.rounds[0].entries[2] == .entered(-50))
+    }
+
+    @Test("消したマスは、計算し直した時点で逆算される")
+    func clearedCellIsDerivedOnRecompute() {
         var session = filledRound()
         // 4人目を手で上書きして、全員が手入力の状態にする
         session.enter(99, at: Position(round: 0, column: 3))
         #expect(session.rounds[0].entries[3] == .entered(99))
 
-        // 2人目を消すと、残り3人から2人目が逆算される
         session.clear(at: Position(round: 0, column: 1))
+        // クリアした直後は空のまま
+        #expect(session.rounds[0].entries[1] == .empty)
+
+        session.recomputeRound(at: 0)
         #expect(session.rounds[0].entries[1] == .derived(-(-32 - 50 + 99)))
         #expect(session.rounds[0].isUnbalanced == false)
     }
