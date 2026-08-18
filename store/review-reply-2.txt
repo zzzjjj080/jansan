@@ -1,0 +1,7 @@
+One addition to our previous reply.
+
+After submitting, we found and fixed a crash that could occur when deleting a player from the roster in the Settings screen. The submission now points to build 1.0 (2), which contains that fix.
+
+The attached screen recording was captured on build 1.0 (1). The user flows it shows are identical in 1.0 (2); only the crash was fixed.
+
+Thank you for your time.
