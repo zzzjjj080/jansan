@@ -7,10 +7,19 @@ struct ScoreTableView: View {
     /// Noをタップした局。確認してから消す
     @State private var pendingRemoval: Int?
 
+    // 局数が中くらいのときは行が画面を埋めるので、この値が効くのは
+    // 「文字に対して行をどれだけ厚くするか」の比と、縮小が止まったあとの高さだけ。
+    // 大きくすると倍率の分母が増え、行の高さはそのままに文字だけ小さくなる
     private let baseRowHeight: CGFloat = 34
     private let baseHeaderHeight: CGFloat = 30
     private let baseFontSize: CGFloat = 14.5
     private let noColumnWidth: CGFloat = 30
+
+    /// 文字と見出しを大きくする上限。ここから先は行の高さだけを伸ばす。
+    /// 局数が少ないだけで文字までどんどん太らせると、表ではなく看板になる
+    private let maxTextScale: CGFloat = 1.45
+    /// これ以上縮めると数字が読めないので、あとはスクロールに任せる
+    private let minScale: CGFloat = 0.55
 
     var body: some View {
         // board.session は描画の途中でも差し替わりうる(記録の読み込み、人数変更)。
@@ -20,11 +29,16 @@ struct ScoreTableView: View {
         let session = board.session
 
         GeometryReader { geometry in
-            let scale = fitScale(roundCount: session.rounds.count, height: geometry.size.height)
+            let layout = metrics(
+                roundCount: session.rounds.count,
+                columns: session.players.count,
+                size: geometry.size
+            )
+            let scale = layout.scale
             // 名前の行と合計の行は常に見えていてほしいので、スクロールするのは中身だけ
             let chrome = baseHeaderHeight * scale * 2
             let available = max(0, geometry.size.height - chrome)
-            let required = baseRowHeight * scale * CGFloat(session.rounds.count)
+            let required = layout.rowHeight * CGFloat(session.rounds.count)
 
             VStack(spacing: 0) {
                 headerRow(players: session.players, scale: scale)
@@ -37,7 +51,8 @@ struct ScoreTableView: View {
                                     round: round,
                                     index: index,
                                     decimalMode: session.decimalMode,
-                                    scale: scale
+                                    scale: scale,
+                                    height: layout.rowHeight
                                 )
                                 .id(index)
                             }
@@ -80,11 +95,30 @@ struct ScoreTableView: View {
     /// あちらは実際の高さを測りながら --scale を 0.04 ずつ下げるループだったが、
     /// 必要な高さは行数から計算できるので、SwiftUIでは一度で倍率を出せる。
     ///
-    /// 0.55 より小さくすると数字が読めなくなるので、そこから先は縮めずスクロールに任せる。
-    private func fitScale(roundCount: Int, height: CGFloat) -> CGFloat {
-        guard height > 0 else { return 1 }
-        let required = baseHeaderHeight * 2 + baseRowHeight * CGFloat(roundCount)
-        return min(1, max(0.55, height / required))
+    /// 文字の倍率と行の高さを分けて返す。
+    /// 全体を同じ倍率で伸縮させるだけだと、局数が少ないときに表が上の数分の一に
+    /// 貼り付いたまま下が丸ごと余る。かといって文字ごと拡大すると表が看板になる。
+    /// そこで文字と見出しは maxTextScale で頭打ちにし、**余った高さは行にだけ配る。**
+    ///
+    /// 行を伸ばすのはマスが正方形になるところまで。それ以上は数字がぽつんと浮いた
+    /// 縦長のマスになって、埋まっているのに読みにくいという逆転が起きる。
+    ///
+    /// No列の幅は3種類の行すべてで scale を使う。ここに行ごとの倍率を混ぜると
+    /// 見出しと中身で列がずれる。
+    private func metrics(roundCount: Int, columns: Int, size: CGSize) -> (scale: CGFloat, rowHeight: CGFloat) {
+        guard size.height > 0, size.width > 0, roundCount > 0, columns > 0 else {
+            return (1, baseRowHeight)
+        }
+        let rows = CGFloat(roundCount)
+        let uniform = size.height / (baseHeaderHeight * 2 + baseRowHeight * rows)
+        let scale = min(maxTextScale, max(minScale, uniform))
+
+        // 見出しと合計を置いた残りを行数で割る。局数が多ければ基準の高さのまま溢れさせ、
+        // スクロールに任せる(min ではなく max を取っているのはそのため)
+        let leftover = max(0, size.height - baseHeaderHeight * scale * 2)
+        let filled = max(baseRowHeight * scale, leftover / rows)
+        let square = (size.width - noColumnWidth * scale) / CGFloat(columns)
+        return (scale, min(filled, square))
     }
 
     // MARK: - 行
@@ -109,7 +143,7 @@ struct ScoreTableView: View {
         .overlay(alignment: .bottom) { hairline }
     }
 
-    private func scoreRow(round: Round, index: Int, decimalMode: Bool, scale: CGFloat) -> some View {
+    private func scoreRow(round: Round, index: Int, decimalMode: Bool, scale: CGFloat, height: CGFloat) -> some View {
         let highlight = round.topAndLastColumns
         let isUnbalanced = round.isUnbalanced
         return HStack(spacing: 0) {
@@ -134,7 +168,7 @@ struct ScoreTableView: View {
                 )
             }
         }
-        .frame(height: baseRowHeight * scale)
+        .frame(height: height)
         .overlay(alignment: .bottom) { hairline }
     }
 

@@ -246,6 +246,10 @@ struct SettingsView: View {
 #if DEBUG
     private var debugSection: some View {
         Section {
+            Button("デモデータを3局入れる") {
+                board.seedDemoRounds(3)
+                dismiss()
+            }
             Button("デモデータを12局入れる") {
                 board.seedDemoRounds(12)
                 dismiss()
@@ -257,7 +261,7 @@ struct SettingsView: View {
         } header: {
             Text("開発用")
         } footer: {
-            Text("行数が増えたときの自動縮小を確認するためのものです。リリースビルドには含まれません。")
+            Text("局数に応じた表の伸び縮みを確認するためのものです。リリースビルドには含まれません。")
         }
     }
 #endif
