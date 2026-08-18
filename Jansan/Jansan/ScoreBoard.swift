@@ -286,11 +286,6 @@ final class ScoreBoard {
         syncPlayers()
     }
 
-    func applyPreset(activeCount: Int) {
-        roster.applyPreset(activeCount: activeCount)
-        syncPlayers()
-    }
-
     /// 表の行そのものを消す。入れ間違えた局の取り消し用
     func removeRound(at index: Int) {
         session.removeRound(at: index)

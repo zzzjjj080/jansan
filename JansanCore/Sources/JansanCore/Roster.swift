@@ -101,11 +101,4 @@ public struct Roster: Equatable, Sendable, Codable {
         members.remove(at: index)
     }
 
-    /// 三人打ち/四人打ちのプリセット。先頭から count 人を参加にする
-    public mutating func applyPreset(activeCount count: Int) {
-        let limit = min(count, Self.maxActive)
-        for index in members.indices {
-            members[index].isActive = index < limit
-        }
-    }
 }

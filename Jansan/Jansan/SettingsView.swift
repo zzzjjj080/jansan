@@ -19,7 +19,6 @@ struct SettingsView: View {
             Form {
                 newSessionSection
                 membersSection
-                presetsSection
                 inputSection
                 appearanceSection
                 recordSection
@@ -98,7 +97,7 @@ struct SettingsView: View {
         } header: {
             Text("参加メンバー（\(board.roster.activeCount)人）")
         } footer: {
-            Text("チェックが「今回参加」で、そのまま表の列になります。外したメンバーも名簿には残ります。5〜6人のときは、3人分入力したあと実際に打った4人目をタップすると自動で確定します。")
+            Text("チェックを入れた人がそのまま表の列になります。人数はここで決まります。外したメンバーも名簿には残ります。5〜6人のときは、3人分入力したあと実際に打った4人目をタップすると自動で確定します。")
         }
     }
 
@@ -129,23 +128,6 @@ struct SettingsView: View {
                 Image(systemName: "trash").foregroundStyle(Palette.negative)
             }
             .buttonStyle(.plain)
-        }
-    }
-
-    // MARK: - プリセット
-
-    private var presetsSection: some View {
-        Section("モードプリセット") {
-            Picker("人数", selection: Binding(
-                get: { board.roster.activeCount },
-                set: { board.applyPreset(activeCount: $0) }
-            )) {
-                Text("三人打ち").tag(3)
-                Text("四人打ち").tag(4)
-                Text("五人").tag(5)
-                Text("六人").tag(6)
-            }
-            .pickerStyle(.segmented)
         }
     }
 

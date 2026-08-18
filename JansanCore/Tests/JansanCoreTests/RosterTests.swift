@@ -35,15 +35,6 @@ struct RosterTests {
         #expect(roster.members.count == 6)
     }
 
-    @Test("プリセットで人数を切り替える")
-    func presets() {
-        var roster = sample()
-        roster.applyPreset(activeCount: 3)
-        #expect(roster.activeNames == ["中村", "五十嵐", "斎藤"])
-
-        roster.applyPreset(activeCount: 4)
-        #expect(roster.activeCount == 4)
-    }
 
     @Test("名前を空にするとプレースホルダが入る")
     func renameNeverEmpties() {
@@ -59,7 +50,8 @@ struct RosterTests {
         session.enter(-32, at: Position(round: 0, column: 0))
         session.enter(71, at: Position(round: 0, column: 1))
 
-        roster.applyPreset(activeCount: 3)
+        // 4人目のチェックを外して3人にする
+        roster.toggleActive(id: roster.members[3].id)
         session.setPlayers(roster.activeNames)
 
         #expect(session.players == ["中村", "五十嵐", "斎藤"])
