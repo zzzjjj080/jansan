@@ -1,6 +1,9 @@
+0. UPDATED BUILD
+We have uploaded build 1.0 (2). It fixes a crash when deleting a player in Settings. Please review this build. The attached recording is from 1.0 (1); the flows it shows are unchanged in 1.0 (2).
+
 1. SCREEN RECORDING
-A screen recording captured on a physical iPhone 15 (iOS 26.6) is attached. It begins with launching the app and shows the typical flow: entering scores on the keypad, the automatic calculation of the fourth player's score, the statistics view, CSV export, and settings.
-The app has no account registration, login, or account deletion, because it does not use accounts. It requests no sensitive data or device capabilities, so no permission prompts appear.
+A screen recording captured on a physical iPhone 15 (iOS 26.6) is attached. It begins with launching the app and shows entering scores on the keypad, the automatic calculation of the fourth player's score, the statistics view, CSV export, and settings.
+The app has no account registration, login, or account deletion. It requests no sensitive data or device capabilities, so no permission prompts appear.
 
 2. DEVICES AND OS TESTED
 - iPhone 15, iOS 26.6 (physical device)
@@ -10,13 +13,13 @@ Deployment target: iOS 18.0+, iPhone only, portrait only.
 
 3. FUNCTION AND TARGET AUDIENCE
 Jansan is a score sheet for the tile game mahjong.
-Problem: when friends play mahjong, someone must write each round's scores on paper or type them into an app. Existing tools need many taps per round, which interrupts the game.
-How it works: players are columns, rounds are rows. The user taps a cell and types a score. Because the scores in one round always add up to zero, entering three players' scores lets the app derive the fourth automatically. Entering two digits confirms the value and advances to the next player with no confirm button. Five or six people can rotate through a four-player table, and the app marks sitting-out players automatically.
-Audience: people who play mahjong recreationally and want a running score sheet during the game.
-IMPORTANT: this app records point scores only. It contains NO gambling, NO betting, NO wagering of real or virtual currency, and NO simulated gambling. There is no money feature of any kind. It is a record keeper, comparable to a scorecard for a card game or a bowling score sheet.
+Problem: when friends play mahjong, someone must write each round's scores down or type them into an app. Existing tools need many taps per round, interrupting the game.
+How it works: players are columns, rounds are rows. The user taps a cell and types a score. Because the scores in one round always add up to zero, entering three players' scores lets the app derive the fourth automatically. Two digits confirm the value and advance to the next player with no confirm button. Five or six people can rotate through a four-player table, and the app marks sitting-out players automatically.
+Audience: people who play mahjong recreationally and want a score sheet during the game.
+IMPORTANT: this app records point scores only. It contains NO gambling, NO betting, NO wagering of real or virtual currency, and NO simulated gambling. There is no money feature of any kind. It is a record keeper, like a scorecard for a card game or bowling.
 
 4. SETUP AND ACCESS
-No setup, account, or login credentials are required. Every feature is available immediately after launch. No sample files are needed.
+No setup, account, or login credentials are required. Every feature is available immediately after launch, and no sample files are needed.
 - Launch the app. A table with four sample player names appears.
 - Tap any empty cell. The numeric keypad appears.
 - Enter a number. Two digits confirm automatically and the cursor advances. The red minus key makes the value negative.
@@ -28,7 +31,7 @@ No setup, account, or login credentials are required. Every feature is available
 
 5. EXTERNAL SERVICES, TOOLS, OR PLATFORMS
 None. The app uses only Apple frameworks: SwiftUI, SwiftData, Swift Charts, StoreKit. There are no third-party SDKs, no analytics, no advertising, no authentication service, no AI service, and no data provider. The app does not connect to the internet for any of its features, and all user data stays on the device.
-Regarding StoreKit: settings include an optional tip jar so users may support development. The in-app purchase product is not registered yet because the required banking and tax information is still being prepared. Until then that section shows only a line of text stating it is currently unavailable, and no purchase button is displayed. The app is fully functional without it and no feature is locked behind it.
+Regarding StoreKit: settings include an optional tip jar. The in-app purchase product is not registered yet because the required banking and tax information is still being prepared. Until then that section shows only a line of text stating it is unavailable, and no purchase button is displayed. No feature is locked behind it.
 
 6. REGIONAL DIFFERENCES
 None. The app behaves identically in all regions. It is localized in Japanese only and is currently set for distribution in Japan only.
@@ -36,4 +39,4 @@ None. The app behaves identically in all regions. It is localized in Japanese on
 7. REGULATED INDUSTRY OR PROTECTED MATERIAL
 The app does not operate in a regulated industry and contains no protected third-party material. Mahjong is a traditional tile game; this app does not simulate playing it, does not involve gambling or betting, and does not handle real or virtual money. It only records the point scores players report to it. All artwork, text, and source code were created by the developer.
 
-Please let us know if anything else would help.
+Please let us know if anything else helps.
