@@ -40,6 +40,35 @@ public struct Roster: Equatable, Sendable, Codable {
         members.filter(\.isActive).count
     }
 
+    // MARK: - ID指定の操作
+
+    /// 画面側は添字ではなくIDで指すこと。
+    /// SwiftUIのForEachに添字を渡すと、削除で件数が減った直後に
+    /// 古い添字のまま再描画が走り、配列の範囲外アクセスで落ちる。
+    public func index(of id: Member.ID) -> Int? {
+        members.firstIndex { $0.id == id }
+    }
+
+    public func member(_ id: Member.ID) -> Member? {
+        index(of: id).map { members[$0] }
+    }
+
+    public mutating func rename(id: Member.ID, to name: String) {
+        guard let index = index(of: id) else { return }
+        rename(at: index, to: name)
+    }
+
+    @discardableResult
+    public mutating func toggleActive(id: Member.ID) -> Bool {
+        guard let index = index(of: id) else { return false }
+        return toggleActive(at: index)
+    }
+
+    public mutating func remove(id: Member.ID) {
+        guard let index = index(of: id) else { return }
+        remove(at: index)
+    }
+
     // MARK: - 編集
 
     public mutating func rename(at index: Int, to name: String) {

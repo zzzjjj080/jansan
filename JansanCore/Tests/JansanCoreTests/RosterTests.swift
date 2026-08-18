@@ -66,4 +66,48 @@ struct RosterTests {
         #expect(session.rounds[0].entries[0] == .entered(-32))
         #expect(session.rounds[0].entries[1] == .entered(71))
     }
+
+    // 画面側は添字ではなくIDでメンバーを指す。
+    // 添字だと、削除で件数が減った直後に古い添字のまま再描画が走り、
+    // 配列の範囲外アクセスでアプリが落ちる(実際に落ちた)。
+
+    @Test("IDで指定して削除できる")
+    func removesByID() {
+        var roster = sample()
+        let target = roster.members[0].id
+
+        roster.remove(id: target)
+        #expect(roster.members.count == 5)
+        #expect(roster.index(of: target) == nil)
+        #expect(roster.members.first?.name == "五十嵐")
+    }
+
+    @Test("削除済みのIDを指しても何も起きない")
+    func staleIDIsIgnored() {
+        var roster = sample()
+        let target = roster.members[0].id
+        roster.remove(id: target)
+        let before = roster.members
+
+        // 消えたIDに対する操作は、落ちずに無視される
+        roster.remove(id: target)
+        roster.rename(id: target, to: "誰か")
+        let changed = roster.toggleActive(id: target)
+        #expect(changed == false)
+        #expect(roster.member(target) == nil)
+        #expect(roster.members == before)
+    }
+
+    @Test("IDで名前と参加状態を変えられる")
+    func editsByID() {
+        var roster = sample()
+        let target = roster.members[1].id
+
+        roster.rename(id: target, to: "五十嵐さん")
+        #expect(roster.member(target)?.name == "五十嵐さん")
+
+        let deactivated = roster.toggleActive(id: target)
+        #expect(deactivated)
+        #expect(roster.member(target)?.isActive == false)
+    }
 }

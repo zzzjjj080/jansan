@@ -253,15 +253,14 @@ final class ScoreBoard {
 
     // MARK: - 名簿
 
-    func rename(at index: Int, to name: String) {
-        roster.rename(at: index, to: name)
+    func rename(id: Roster.Member.ID, to name: String) {
+        roster.rename(id: id, to: name)
         syncPlayers()
     }
 
     /// そのメンバーに入力済みの点数やお休みがあるか。外す前の確認に使う
-    func hasEntries(memberIndex: Int) -> Bool {
-        guard roster.members.indices.contains(memberIndex) else { return false }
-        let name = roster.members[memberIndex].name
+    func hasEntries(id: Roster.Member.ID) -> Bool {
+        guard let name = roster.member(id)?.name else { return false }
         guard let column = session.players.firstIndex(of: name) else { return false }
         return session.rounds.contains { round in
             let entry = round.entries[column]
@@ -271,8 +270,8 @@ final class ScoreBoard {
 
     /// 上限や最後の1人の制約で切り替えられなかった場合は false
     @discardableResult
-    func toggleActive(at index: Int) -> Bool {
-        let changed = roster.toggleActive(at: index)
+    func toggleActive(id: Roster.Member.ID) -> Bool {
+        let changed = roster.toggleActive(id: id)
         if changed { syncPlayers() }
         return changed
     }
@@ -282,8 +281,8 @@ final class ScoreBoard {
         syncPlayers()
     }
 
-    func removeMember(at index: Int) {
-        roster.remove(at: index)
+    func removeMember(id: Roster.Member.ID) {
+        roster.remove(id: id)
         syncPlayers()
     }
 

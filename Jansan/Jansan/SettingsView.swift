@@ -10,9 +10,9 @@ struct SettingsView: View {
     @State private var tipJar = TipJar()
     @State private var didSave = false
     @State private var limitAlert = false
-    @State private var pendingDeletion: Int?
+    @State private var pendingDeletion: Roster.Member.ID?
     @State private var resetConfirm = false
-    @State private var pendingDeactivation: Int?
+    @State private var pendingDeactivation: Roster.Member.ID?
 
     var body: some View {
         NavigationStack {
@@ -41,12 +41,12 @@ struct SettingsView: View {
             .alert("この操作は元に戻せません", isPresented: .constant(pendingDeletion != nil)) {
                 Button("キャンセル", role: .cancel) { pendingDeletion = nil }
                 Button("削除", role: .destructive) {
-                    if let index = pendingDeletion { board.removeMember(at: index) }
+                    if let id = pendingDeletion { board.removeMember(id: id) }
                     pendingDeletion = nil
                 }
             } message: {
-                if let index = pendingDeletion, board.roster.members.indices.contains(index) {
-                    Text("「\(board.roster.members[index].name)」を名簿から完全に削除します。")
+                if let id = pendingDeletion, let member = board.roster.member(id) {
+                    Text("「\(member.name)」を名簿から完全に削除します。")
                 }
             }
             .confirmationDialog("新規セッションにしますか", isPresented: $resetConfirm, titleVisibility: .visible) {
@@ -62,7 +62,8 @@ struct SettingsView: View {
                 Text("いまの表は消えます。あとで見返したい対局なら、残してから始めてください。")
             }
             .confirmationDialog(
-                pendingDeactivation.map { "「\(board.roster.members[$0].name)」を今回の参加から外しますか" } ?? "",
+                pendingDeactivation.flatMap { board.roster.member($0) }
+                    .map { "「\($0.name)」を今回の参加から外しますか" } ?? "",
                 isPresented: Binding(
                     get: { pendingDeactivation != nil },
                     set: { if !$0 { pendingDeactivation = nil } }
@@ -70,7 +71,7 @@ struct SettingsView: View {
                 titleVisibility: .visible
             ) {
                 Button("外す（点数は消えます）", role: .destructive) {
-                    if let index = pendingDeactivation { board.toggleActive(at: index) }
+                    if let id = pendingDeactivation { board.toggleActive(id: id) }
                     pendingDeactivation = nil
                 }
                 Button("やめる", role: .cancel) { pendingDeactivation = nil }
@@ -84,8 +85,10 @@ struct SettingsView: View {
 
     private var membersSection: some View {
         Section {
-            ForEach(board.roster.members.indices, id: \.self) { index in
-                memberRow(index)
+            // 添字ではなくメンバーそのものを回す。
+            // 添字だと、削除で件数が減った直後に古い添字のまま再描画が走って落ちる
+            ForEach(board.roster.members) { member in
+                memberRow(member)
             }
             Button {
                 board.addMember()
@@ -99,28 +102,29 @@ struct SettingsView: View {
         }
     }
 
-    private func memberRow(_ index: Int) -> some View {
+    private func memberRow(_ member: Roster.Member) -> some View {
         HStack(spacing: 12) {
             Button {
                 // 入力済みの人を外すと点数ごと消えるので、そのときだけ確認する
-                if board.roster.members[index].isActive, board.hasEntries(memberIndex: index) {
-                    pendingDeactivation = index
-                } else if !board.toggleActive(at: index) {
+                if member.isActive, board.hasEntries(id: member.id) {
+                    pendingDeactivation = member.id
+                } else if !board.toggleActive(id: member.id) {
                     limitAlert = true
                 }
             } label: {
-                Image(systemName: board.roster.members[index].isActive ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(board.roster.members[index].isActive ? Palette.accent : Palette.inkDim)
+                Image(systemName: member.isActive ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(member.isActive ? Palette.accent : Palette.inkDim)
             }
             .buttonStyle(.plain)
 
             TextField("名前", text: Binding(
-                get: { board.roster.members[index].name },
-                set: { board.rename(at: index, to: $0) }
+                // 値そのものを使う。ここで配列を引き直すと削除直後に落ちる
+                get: { member.name },
+                set: { board.rename(id: member.id, to: $0) }
             ))
 
             Button {
-                pendingDeletion = index
+                pendingDeletion = member.id
             } label: {
                 Image(systemName: "trash").foregroundStyle(Palette.negative)
             }
