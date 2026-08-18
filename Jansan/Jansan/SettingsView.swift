@@ -45,7 +45,10 @@ struct SettingsView: View {
                 }
             } message: {
                 if let id = pendingDeletion, let member = board.roster.member(id) {
-                    Text("「\(member.name)」を名簿から完全に削除します。")
+                    // 参加中で点数が入っている人なら、消えるものを具体的に伝える
+                    Text(board.hasEntries(id: id)
+                         ? "「\(member.name)」を名簿から完全に削除します。この対局に入力済みの点数も一緒に消えます。"
+                         : "「\(member.name)」を名簿から完全に削除します。")
                 }
             }
             .confirmationDialog("新規セッションにしますか", isPresented: $resetConfirm, titleVisibility: .visible) {

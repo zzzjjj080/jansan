@@ -114,6 +114,15 @@ public struct Session: Equatable, Sendable, Codable {
 
     // MARK: - 参加メンバーの変更
 
+    /// 列の中身はそのままに、見出しの名前だけ差し替える。
+    ///
+    /// setPlayers は名前で対応付けるため、改名に使うと別人が現れたと解釈されて
+    /// その列の点数が丸ごと消える。名前を変えるだけの操作には必ずこちらを使う。
+    public mutating func renamePlayer(at column: Int, to newName: String) {
+        guard players.indices.contains(column) else { return }
+        players[column] = newName
+    }
+
     /// 参加者が変わっても、名前をキーに既存の入力を引き継いで列を組み直す
     public mutating func setPlayers(_ newPlayers: [String]) {
         rounds = rounds.map { round in

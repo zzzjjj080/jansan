@@ -254,8 +254,19 @@ final class ScoreBoard {
     // MARK: - 名簿
 
     func rename(id: Roster.Member.ID, to name: String) {
+        // 改名で列を組み直すと、名前で対応付けている都合上その人の点数が消える。
+        // 参加中の人なら見出しだけ差し替え、列の中身には触らない
+        let oldName = roster.member(id)?.name
         roster.rename(id: id, to: name)
-        syncPlayers()
+        guard let newName = roster.member(id)?.name else { return }
+
+        if let oldName, let column = session.players.firstIndex(of: oldName) {
+            session.renamePlayer(at: column, to: newName)
+            scheduleDraftSave()
+        } else {
+            // 参加していない人の改名は列に影響しない
+            syncPlayers()
+        }
     }
 
     /// そのメンバーに入力済みの点数やお休みがあるか。外す前の確認に使う
