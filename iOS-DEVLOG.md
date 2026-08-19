@@ -39,7 +39,7 @@
 | App Store Connect の数字 | 1070981569（**Team IDとは別物**） |
 | GitHub | `zzzjjj080` / SSH鍵設定済み（パスフレーズなし） |
 | git identity | jin / zzzjjj080@gmail.com |
-| 実機 | **iPhone Air**（iPhone18,4 / iOS 26.6）と **iPhone 15**。両方チーム登録済み |
+| 実機 | **iPhone Air**（iPhone18,4 / iOS 26.6）1台のみ。チーム登録済み |
 | Homebrew / gh | **入っていない** |
 
 Claude Codeの権限は `~/.claude/settings.json` で許可済み。
