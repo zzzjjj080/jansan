@@ -321,6 +321,80 @@ UIを足したら「その経路も確認を通るか」を必ず確かめる。
 デジタルサービス法により、氏名・住所・電話の公開が要る。
 **配信地域を日本のみに限定すれば不要。** あとから広げるのは審査なしでできる。
 
+### 4-18. 「今日」を起動時に一度だけ決めると、日をまたいで止まる
+
+iPhoneのアプリは**終了しない**。ホームに戻しても裏で生きている。
+`init` で `today` を決めて放置すると、翌日開いても昨日のままになる。
+ゆるトレ日記は、日付が変わってもカレンダーの「今日」が動かず、歩数も古いままだった。
+
+外部データの読み込み（HealthKit等）を `.task` にだけ書くのも同じ問題。
+**`.task` はビューが最初に出たときにしか走らない。** 復帰では走らない。
+
+```swift
+@Environment(\.scenePhase) private var phase
+
+.task { await refresh() }                                   // 起動時
+.onChange(of: phase) { _, new in                            // 復帰時
+    if new == .active { Task { await refresh() } }
+}
+.onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)
+    .receive(on: RunLoop.main)) { _ in Task { await refresh() } }   // 前面のまま日をまたいだとき
+```
+
+3つとも要る。前面にいると `scenePhase` は変わらないので、日跨ぎは通知でしか拾えない。
+
+**順番に注意。** 日付を進めてからデータを読む。逆だと日付が変わった直後に
+「昨日まで」を読んでしまい、今日が空のままになる。
+`.task` と `.onChange` が同時に走ることがあるので、再入防止のフラグも要る。
+
+**確認の仕方**（実機で日付を跨がせずに試せる）:
+設定 → 一般 → 日付と時刻 → 自動をオフ → 翌日に進める → アプリに戻る。
+
+### 4-19. `set -e` + `grep` の空振りで、スクリプトが無言で死ぬ
+
+```bash
+set -e
+LINE=$(xcrun devicectl list devices | grep -m1 " connected ")
+if [ -z "$LINE" ]; then echo "繋がっていません"; exit 1; fi   # ← ここに来ない
+```
+
+grep は一致が無いと終了コード1。`set -e` はその時点でスクリプトを終わらせるので、
+**用意したエラーメッセージが表示されない。** 出力ゼロ・終了コード0に見えて、原因が分からない。
+
+```bash
+LINE=$(xcrun devicectl list devices 2>/dev/null | grep -m1 " connected " || true)
+```
+
+4-1（エラーを握り潰さない）と同じ話がシェルでも起きる、と覚えておく。
+
+### 4-20. `devicectl` の `available (paired)` は「今は繋がっていない」
+
+| 表示 | 意味 |
+|---|---|
+| `connected` | 今すぐ使える |
+| `available (paired)` | 前にペアリングしただけ。**今は使えない** |
+| `unavailable` | 電源オフ、または未接続 |
+
+`available` の端末を `-destination` に渡すと
+`The developer disk image could not be mounted` で**10分待たされる**。
+選ぶのは `connected` だけにして、`-destination-timeout 30` も付けておく。
+
+### 4-21. 保存している構造体のフィールドを変えると、記録が丸ごと消える
+
+`try? JSONDecoder().decode(...)` は**1つでも欠けると nil を返す**。
+設定を1項目足しただけのつもりで、同じ入れ物に入っていた記録まで失う。
+
+```swift
+// 見つからない項目は既定値で埋めて、必ず読めるようにする
+public init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    passSteps = try c.decodeIfPresent(Int.self, forKey: .passSteps) ?? 10000
+    ...
+}
+```
+
+**旧版のJSONを直書きしたテストを必ず1本置く。** これが無いと気づけない。
+
 ---
 
 ## 5. リリース手続き
@@ -406,6 +480,38 @@ find $A -name "*.storekit"                                             # テス�
 ```
 
 **同じビルド番号は再アップロードできない。** 上げ直すときは必ず `CFBundleVersion` を増やす。
+
+### アップロードは App Store Connect の APIキーで通す
+
+`destination = upload` は Xcode に保存されたアカウントを使うため、**セッションが切れると
+コマンドラインから上げられなくなる。**サインインし直しても直らないことがある。
+
+```
+error: exportArchive Failed to Use Accounts
+Failed to find an account with App Store Connect access for team A7WA598R44
+```
+
+**APIキーを作っておけば、この経路を完全に迂回できる。**
+
+- App Store Connect → ユーザーとアクセス → 統合 → App Store Connect API
+- アクセス権は **App Manager**。生成した `.p8` は**一度しかダウンロードできない**
+- 置き場所は `~/.appstoreconnect/private_keys/AuthKey_<キーID>.p8`（`chmod 600`）
+- **Issuer ID** はキー一覧の上に出ている
+
+```bash
+xcodebuild -exportArchive -archivePath /tmp/App.xcarchive \
+  -exportOptionsPlist ExportOptions.plist -exportPath /tmp/export \
+  -allowProvisioningUpdates \
+  -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_XXXXXXXXXX.p8 \
+  -authenticationKeyID XXXXXXXXXX \
+  -authenticationKeyIssuerID xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+```
+
+雀算のキー: `CH8R5RJGXQ` / Issuer `cfeb84ca-47e6-45b2-8c5f-192212240b6c`
+
+**⚠️ Downloads フォルダはClaude Codeから読み書きできない**（macOSの保護。`ls` は通るが
+`cp`/`mv` が `Operation not permitted` になる）。ダウンロードしたファイルを使うときは、
+**本人にFinderでドラッグしてもらう。**
 
 ### ⑥ 掲載情報
 
