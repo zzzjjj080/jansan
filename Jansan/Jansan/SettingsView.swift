@@ -7,7 +7,7 @@ struct SettingsView: View {
     @Binding var appTheme: AppTheme
     @Environment(\.dismiss) private var dismiss
 
-    @State private var tipJar = TipJar()
+    @State private var tipJar = TipJar(productID: TipJar.productID)
     @State private var didSave = false
     @State private var limitAlert = false
     @State private var pendingDeletion: Roster.Member.ID?
@@ -22,7 +22,7 @@ struct SettingsView: View {
                 inputSection
                 appearanceSection
                 recordSection
-                tipSection
+                CoffeeTipSection(tipJar: tipJar, tint: Palette.toneAInk)
 #if DEBUG
                 debugSection
 #endif
@@ -206,41 +206,6 @@ struct SettingsView: View {
         } footer: {
             Text("「端末に合わせる」はiPhoneのライト/ダーク設定に従います。暗い場所で打つときはダーク固定が読みやすいことがあります。")
         }
-    }
-
-    // MARK: - カンパ
-
-    private var tipSection: some View {
-        Section {
-            switch tipJar.state {
-            case .unavailable:
-                Text("いまは受け付けられません")
-                    .foregroundStyle(Palette.inkDim)
-            case .thanks:
-                Label("ありがとうございます", systemImage: "heart.fill")
-                    .foregroundStyle(Palette.negative)
-            default:
-                Button {
-                    Task { await tipJar.tip() }
-                } label: {
-                    HStack {
-                        Label("開発者にカンパする", systemImage: "cup.and.saucer.fill")
-                        Spacer()
-                        if tipJar.state == .purchasing {
-                            ProgressView()
-                        } else if let price = tipJar.displayPrice {
-                            Text(price).foregroundStyle(Palette.inkDim)
-                        }
-                    }
-                }
-                .disabled(tipJar.product == nil || tipJar.state == .purchasing)
-            }
-        } header: {
-            Text("応援")
-        } footer: {
-            Text("雀算は無料で、広告もありません。気が向いたときだけで大丈夫です。送っていただいても機能は変わりません。")
-        }
-        .task { await tipJar.load() }
     }
 
 #if DEBUG

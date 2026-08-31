@@ -3,22 +3,22 @@
     "eula" : "",
     "policies" : [ ]
   },
-  "identifier" : "A1B2C3D4",
+  "identifier" : "COFFEE01",
   "nonRenewingSubscriptions" : [ ],
   "products" : [
     {
-      "displayPrice" : "100",
+      "displayPrice" : "200",
       "familyShareable" : false,
-      "internalID" : "TIP100",
+      "internalID" : "COFFEE",
       "localizations" : [
         {
-          "description" : "開発者に100円のカンパを送ります",
-          "displayName" : "100円カンパ",
+          "description" : "作者にコーヒーを1杯おごります。機能は変わりません。",
+          "displayName" : "コーヒー1杯",
           "locale" : "ja_JP"
         }
       ],
-      "productID" : "com.zzzjjj080.Jansan.tip100",
-      "referenceName" : "100円カンパ",
+      "productID" : "com.zzzjjj080.Jansan.coffee",
+      "referenceName" : "コーヒー1杯",
       "type" : "Consumable"
     }
   ],

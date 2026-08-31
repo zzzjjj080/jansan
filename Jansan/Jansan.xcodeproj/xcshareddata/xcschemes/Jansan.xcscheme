@@ -26,7 +26,8 @@
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES">
+      shouldUseLaunchSchemeArgsEnv = "YES"
+      StoreKitConfigurationFileReference = "../../../Coffee.storekit">
       <Testables>
          <TestableReference
             skipped = "NO">
@@ -59,7 +60,8 @@
       ignoresPersistentStateOnLaunch = "NO"
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"
-      allowLocationSimulation = "YES">
+      allowLocationSimulation = "YES"
+      StoreKitConfigurationFileReference = "../../../Coffee.storekit">
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
          <BuildableReference
