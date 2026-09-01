@@ -22,6 +22,7 @@ struct SettingsView: View {
                 inputSection
                 appearanceSection
                 recordSection
+                FeedbackSection()
                 CoffeeTipSection(tipJar: tipJar, tint: Palette.toneAInk)
 #if DEBUG
                 debugSection
