@@ -14,6 +14,9 @@ struct ContentView: View {
     @State private var showHistory = false
     @State private var showStats = false
     @State private var showExport = false
+    /// 初回だけ自動で出す。以後は設定の「使い方」から
+    @AppStorage("didShowHowTo") private var didShowHowTo = false
+    @State private var showHowTo = false
     @Environment(\.modelContext) private var context
 
     var body: some View {
@@ -42,9 +45,18 @@ struct ContentView: View {
         .sheet(isPresented: $showExport) {
             ExportView(board: board)
         }
+        .sheet(isPresented: $showHowTo) {
+            HowToView()
+        }
         .task {
             // 前回の続きがあればここで復元される
             board.attach(context: context)
+
+            // 初回だけ使い方を出す。復元より後に置いて、表が描けてから重ねる
+            if !didShowHowTo {
+                didShowHowTo = true
+                showHowTo = true
+            }
         }
     }
 
@@ -76,6 +88,8 @@ struct ContentView: View {
                 } label: {
                     Image(systemName: "gearshape.fill")
                 }
+                .accessibilityIdentifier("openSettings")
+                .accessibilityLabel("設定")
             }
             .font(.system(size: 17))
             .foregroundStyle(Palette.accent)

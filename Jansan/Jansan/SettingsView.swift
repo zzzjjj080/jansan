@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var pendingDeletion: Roster.Member.ID?
     @State private var resetConfirm = false
     @State private var pendingDeactivation: Roster.Member.ID?
+    @State private var showHowTo = false
 
     var body: some View {
         NavigationStack {
@@ -22,11 +23,15 @@ struct SettingsView: View {
                 inputSection
                 appearanceSection
                 recordSection
+                howToSection
                 FeedbackSection()
                 CoffeeTipSection(tipJar: tipJar, tint: Palette.toneAInk)
 #if DEBUG
                 debugSection
 #endif
+            }
+            .sheet(isPresented: $showHowTo) {
+                HowToView()
             }
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)
@@ -179,6 +184,26 @@ struct SettingsView: View {
             Text("記録")
         } footer: {
             Text("入力中の内容は自動で保存されるので、アプリを閉じても続きから再開できます。ここで残す「記録」は別枠で、後から振り返りたい対局を日付付きで取っておくためのものです。")
+        }
+    }
+
+    /// 初回に出した1枚を、あとから読み直せるようにしておく
+    private var howToSection: some View {
+        Section {
+            Button {
+                showHowTo = true
+            } label: {
+                HStack {
+                    Label("使い方", systemImage: "questionmark.circle.fill")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("showHowTo")
         }
     }
 
