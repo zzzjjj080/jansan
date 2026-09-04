@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import JansanCore
 
 struct SettingsView: View {
@@ -6,6 +7,7 @@ struct SettingsView: View {
     @Binding var showHistory: Bool
     @Binding var appTheme: AppTheme
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var context
 
     @State private var tipJar = TipJar(productID: TipJar.productID)
     @State private var didSave = false
@@ -14,6 +16,9 @@ struct SettingsView: View {
     @State private var resetConfirm = false
     @State private var pendingDeactivation: Roster.Member.ID?
     @State private var showHowTo = false
+    @State private var showBackup = false
+    @State private var eraseConfirm = false
+    @State private var eraseDone = false
 
     var body: some View {
         NavigationStack {
@@ -23,15 +28,31 @@ struct SettingsView: View {
                 inputSection
                 appearanceSection
                 recordSection
+                backupSection
                 howToSection
                 FeedbackSection()
                 CoffeeTipSection(tipJar: tipJar, tint: Palette.toneAInk)
+                eraseSection
 #if DEBUG
                 debugSection
 #endif
             }
             .sheet(isPresented: $showHowTo) {
                 HowToView()
+            }
+            .sheet(isPresented: $showBackup) {
+                BackupView(board: board)
+            }
+            .alert("すべてのデータを消しますか", isPresented: $eraseConfirm) {
+                Button("キャンセル", role: .cancel) {}
+                Button("すべて消す", role: .destructive) { eraseEverything() }
+            } message: {
+                Text("保存した記録・入力中の表・メンバーの名簿が、この端末から完全に消えます。元に戻せません。残しておきたいものがあるなら、先に「バックアップ」から書き出してください。")
+            }
+            .alert("消しました", isPresented: $eraseDone) {
+                Button("OK", role: .cancel) { dismiss() }
+            } message: {
+                Text("すべてのデータを削除しました。")
             }
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)
@@ -187,6 +208,42 @@ struct SettingsView: View {
         }
     }
 
+    private var backupSection: some View {
+        Section {
+            Button {
+                showBackup = true
+            } label: {
+                HStack {
+                    Label("バックアップ", systemImage: "externaldrive.fill")
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("showBackup")
+        } footer: {
+            Text("保存した記録をまとめて書き出し、あとから戻せます。機種変更のときはこれを使ってください。書き出し（CSV）は人が読むためのもので、そこからは戻せません。")
+        }
+    }
+
+    /// 端末に残っているものを全部消す。プライバシーポリシーで「端末内にのみ保存」と
+    /// 言っている以上、利用者が自分で消せる導線は用意しておく
+    private var eraseSection: some View {
+        Section {
+            Button(role: .destructive) {
+                eraseConfirm = true
+            } label: {
+                Label("すべてのデータを削除", systemImage: "trash.fill")
+            }
+            .accessibilityIdentifier("eraseAll")
+        } header: {
+            Text("データ")
+        } footer: {
+            Text("記録・入力中の表・名簿をこの端末から完全に消します。元に戻せません。")
+        }
+    }
+
     /// 初回に出した1枚を、あとから読み直せるようにしておく
     private var howToSection: some View {
         Section {
@@ -232,6 +289,16 @@ struct SettingsView: View {
         } footer: {
             Text("「端末に合わせる」はiPhoneのライト/ダーク設定に従います。暗い場所で打つときはダーク固定が読みやすいことがあります。")
         }
+    }
+
+    /// 保存済みの記録と下書きを消し、名簿も初期状態に戻す。
+    /// SwiftData の削除とアプリ側の状態はつながっていないので、両方に触る
+    private func eraseEverything() {
+        let all = (try? context.fetch(FetchDescriptor<SavedGame>())) ?? []
+        for record in all { context.delete(record) }
+        try? context.save()
+        board.eraseAll()
+        eraseDone = true
     }
 
 #if DEBUG

@@ -349,6 +349,17 @@ final class ScoreBoard {
         deselect()
     }
 
+    /// 「すべてのデータを削除」から呼ぶ。名簿ごと初期状態に戻す。
+    /// **取り消しの履歴も捨てる。** 消したものを戻せてしまうと「削除した」と言えない
+    func eraseAll() {
+        undo.removeAll()
+        roster = Roster(names: ["プレイヤー1", "プレイヤー2", "プレイヤー3", "プレイヤー4"], activeCount: 4)
+        session = Session(players: roster.activeNames, decimalMode: false)
+        autoConfirm = true
+        deselect()
+        saveDraft()
+    }
+
     /// 名簿を変えたら列を組み直す。選択中のマスは位置がずれるので解除する
     private func syncPlayers() {
         guard !roster.activeNames.isEmpty else { return }
