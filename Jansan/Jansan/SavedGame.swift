@@ -9,17 +9,20 @@ import JansanCore
 /// - isDraft = false … 「保存」で明示的に残した記録。履歴として一覧に出る
 ///
 /// 一覧表示に使う項目は普通のプロパティに出しておき、復元用の全体は payload に入れる。
+/// **すべての属性に既定値を持たせてある。** CloudKit と同期する SwiftData の
+/// モデルは、必須の属性（既定値も省略値も無い属性）を持てない。
+/// 1つでも欠けると起動時にコンテナの初期化が失敗し、**アプリが立ち上がらなくなる。**
 @Model
 final class SavedGame {
-    var savedAt: Date
-    var isDraft: Bool
-    var playerNames: [String]
-    var totals: [Int]
+    var savedAt: Date = Date.distantPast
+    var isDraft: Bool = false
+    var playerNames: [String] = [String]()
+    var totals: [Int] = [Int]()
     /// 実際に打った局数。既存の記録との互換のため既定値を持たせる
     var roundCount: Int = 0
     /// 保存した時点の小数点モード。現在の設定で解釈すると10倍に見えてしまうため一緒に残す
-    var decimalMode: Bool
-    var payload: Data
+    var decimalMode: Bool = false
+    var payload: Data = Data()
 
     /// 取り込みの重複判定に使う安定したID。
     /// 既存の記録にも自動で1つ入る（それぞれ別のUUIDになるので判定に使える）
