@@ -8,6 +8,7 @@ struct StatsView: View {
 
     /// 凡例をタップして1人だけ強調している状態
     @State private var soloed: String?
+    @State private var showAll = false
 
     private var session: Session { board.session }
     private var stats: [PlayerStats] { session.playerStats() }
@@ -23,6 +24,11 @@ struct StatsView: View {
                             description: Text("全員の点数が入った局が1つ以上あると、着順と推移が出ます。")
                         )
                         .padding(.top, 40)
+
+                        // この対局に集計できる局が無くても、過去の記録は見たい
+                        Button("保存した記録をまとめて見る") { showAll = true }
+                            .font(.footnote.weight(.semibold))
+                            .frame(maxWidth: .infinity)
                     } else {
                         heading("着順・成績")
                         ScrollView(.horizontal, showsIndicators: false) {
@@ -39,9 +45,20 @@ struct StatsView: View {
             .navigationTitle("ビュー")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    Button {
+                        showAll = true
+                    } label: {
+                        Label("全記録", systemImage: "square.stack.3d.up")
+                    }
+                    .accessibilityIdentifier("showAllStats")
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("閉じる") { dismiss() }
                 }
+            }
+            .sheet(isPresented: $showAll) {
+                AllStatsView()
             }
         }
     }
