@@ -57,10 +57,3 @@ final class SavedGame {
             .joined(separator: " / ")
     }
 }
-
-/// 保存に必要な状態をまとめたもの
-struct GameSnapshot: Codable {
-    var roster: Roster
-    var session: Session
-    var autoConfirm: Bool
-}
