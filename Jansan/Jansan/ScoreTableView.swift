@@ -12,7 +12,14 @@ struct ScoreTableView: View {
     // 大きくすると倍率の分母が増え、行の高さはそのままに文字だけ小さくなる
     private let baseRowHeight: CGFloat = 34
     private let baseHeaderHeight: CGFloat = 30
-    private let baseFontSize: CGFloat = 14.5
+    /// 端末の文字サイズ設定に追従させる。
+    ///
+    /// **表は列数ぶんを横に並べる必要があるので、無制限には大きくできない。**
+    /// 大きくしすぎると数字が「32…」と潰れ、読めるどころか読めなくなる。
+    /// そこで @ScaledMetric で追従はさせたうえで、下の metrics(_:) の
+    /// maxTextScale で頭打ちにしている。
+    /// それでも足りない人には、読み上げ（VoiceOver）で全部の値が読める。
+    @ScaledMetric(relativeTo: .body) private var baseFontSize: CGFloat = 14.5
     private let noColumnWidth: CGFloat = 30
 
     /// 文字と見出しを大きくする上限。ここから先は行の高さだけを伸ばす。
@@ -157,10 +164,17 @@ struct ScoreTableView: View {
                 .background(isUnbalanced ? Palette.lastTint : Palette.bg)
                 .contentShape(Rectangle())
                 .onTapGesture { pendingRemoval = index }
+                .accessibilityElement()
+                .accessibilityLabel("\(index + 1)局目")
+                .accessibilityValue(isUnbalanced ? "合計が0になっていません" : "")
+                .accessibilityHint("タップするとこの局を削除できます")
+                .accessibilityAddTraits(.isButton)
             ForEach(Array(round.entries.enumerated()), id: \.offset) { column, entry in
                 cell(
                     entry: entry,
                     position: Position(round: index, column: column),
+                    playerName: board.session.players.indices.contains(column)
+                        ? board.session.players[column] : "\(column + 1)人目",
                     isTop: highlight?.top.contains(column) ?? false,
                     isLast: highlight?.last.contains(column) ?? false,
                     decimalMode: decimalMode,
@@ -178,12 +192,17 @@ struct ScoreTableView: View {
                 .font(.system(size: 12.5 * scale, weight: .heavy))
                 .foregroundStyle(Palette.inkDim)
                 .frame(width: noColumnWidth * scale)
-            ForEach(Array(totals.enumerated()), id: \.offset) { _, total in
+            ForEach(Array(totals.enumerated()), id: \.offset) { column, total in
                 Text(ScoreFormatter.string(total, decimalMode: decimalMode))
                     .font(.system(size: baseFontSize * scale, weight: .heavy))
                     .monospacedDigit()
                     .foregroundStyle(total < 0 ? Palette.negative : Palette.ink)
                     .frame(maxWidth: .infinity)
+                    .accessibilityLabel(
+                        board.session.players.indices.contains(column)
+                            ? "\(board.session.players[column]) の合計" : "合計"
+                    )
+                    .accessibilityValue(ScoreFormatter.signedString(total, decimalMode: decimalMode))
             }
         }
         .frame(height: baseHeaderHeight * scale)
@@ -196,6 +215,7 @@ struct ScoreTableView: View {
     private func cell(
         entry: Entry,
         position: Position,
+        playerName: String,
         isTop: Bool,
         isLast: Bool,
         decimalMode: Bool,
@@ -218,6 +238,23 @@ struct ScoreTableView: View {
             }
             .contentShape(Rectangle())
             .onTapGesture { board.tap(position) }
+            // 画面では「·」「－」としか出ないので、読み上げには意味の分かる言葉を渡す
+            .accessibilityElement()
+            .accessibilityIdentifier("cell-\(position.round)-\(position.column)")
+            .accessibilityLabel("\(playerName) \(position.round + 1)局目")
+            .accessibilityValue(spokenValue(entry: entry, preview: preview, decimalMode: decimalMode))
+            .accessibilityHint(isSelected ? "選択中です" : "タップして点数を入力")
+            .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
+    }
+
+    /// 読み上げ用の言い換え。記号のまま読ませると意味が伝わらない
+    private func spokenValue(entry: Entry, preview: Int?, decimalMode: Bool) -> String {
+        if let preview { return "入力中 \(ScoreFormatter.string(preview, decimalMode: decimalMode))" }
+        if entry.isResting { return "お休み" }
+        guard let value = entry.value else { return "未入力" }
+        let body = ScoreFormatter.string(value, decimalMode: decimalMode)
+        // 「自動で入った」ことが分からないと、消していいマスかどうか判断できない
+        return entry == .derived(value) ? "\(body) 自動計算" : body
     }
 
     private func label(for entry: Entry, preview: Int?, decimalMode: Bool) -> String {

@@ -293,6 +293,9 @@ struct AllStatsView: View {
                     numberCell(percent(stat.lastRate))
                 }
                 .padding(.vertical, 2)
+                // マス単位で読ませると数字だけが並んで意味が取れない。行ごとにまとめる
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(spoken(stat))
             }
         }
     }
@@ -312,6 +315,17 @@ struct AllStatsView: View {
             .foregroundStyle(negative ? Palette.negative : Palette.ink)
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 4)
+    }
+
+    /// 1行ぶんの読み上げ。数字だけを並べても意味が伝わらないので、項目名を添える
+    private func spoken(_ stat: AggregatedStats) -> String {
+        var parts = ["\(stat.name)",
+                     "\(stat.games)対局",
+                     "合計 \(ScoreFormatter.signedString(stat.total, decimalMode: displayDecimalMode))"]
+        if let rank = stat.averageRank { parts.append("平均着順 \(String(format: "%.2f", rank))") }
+        if let top = stat.topRate { parts.append("トップ率 \(Int((top * 100).rounded()))パーセント") }
+        if let last = stat.lastRate { parts.append("ラス率 \(Int((last * 100).rounded()))パーセント") }
+        return parts.joined(separator: "、")
     }
 
     private func percent(_ value: Double?) -> String {

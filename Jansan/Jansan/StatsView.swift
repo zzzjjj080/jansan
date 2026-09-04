@@ -126,8 +126,23 @@ struct StatsView: View {
                         .foregroundStyle(Palette.ink)
                 }
                 .padding(.vertical, 2)
+                // マス単位で読ませると数字だけが並んで意味が取れない。行ごとにまとめる
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(spoken(stat))
             }
         }
+    }
+
+    /// 1行ぶんの読み上げ。項目名を添えないと数字の意味が分からない
+    private func spoken(_ stat: PlayerStats) -> String {
+        var parts = ["\(stat.name)",
+                     "合計 \(ScoreFormatter.signedString(stat.total, decimalMode: session.decimalMode))",
+                     "\(stat.played)局"]
+        for rank in rankColumns where stat.count(ofRank: rank) > 0 {
+            parts.append("\(rank)位 \(stat.count(ofRank: rank))回")
+        }
+        if let rank = stat.averageRank { parts.append("平均着順 \(String(format: "%.2f", rank))") }
+        return parts.joined(separator: "、")
     }
 
     private func headerCell(_ text: String) -> some View {

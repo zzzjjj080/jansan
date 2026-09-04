@@ -78,6 +78,7 @@ struct KeypadView: View {
             .monospacedDigit()
             .foregroundStyle(captionColor)
             .frame(maxWidth: .infinity)
+            .accessibilityAddTraits(.isHeader)
             .frame(minHeight: 30)
     }
 
@@ -110,6 +111,18 @@ struct KeypadView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 11))
         }
         .buttonStyle(KeyButtonStyle())
+        // 「−」「⌫」は記号のまま読ませても伝わらない
+        .accessibilityLabel(spokenKeyName(title))
+    }
+
+    /// キーの読み上げ名。記号は言葉に置き換える
+    private func spokenKeyName(_ title: String) -> String {
+        switch title {
+        case "−": "マイナス"
+        case "⌫": "1文字消す"
+        case "お休み": "お休み。この局を打たなかったことにします"
+        default: title
+        }
     }
 }
 
