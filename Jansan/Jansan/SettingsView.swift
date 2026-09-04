@@ -210,6 +210,15 @@ struct SettingsView: View {
 
     private var backupSection: some View {
         Section {
+            HStack(spacing: 10) {
+                Image(systemName: CloudStatus.symbol)
+                    .foregroundStyle(CloudStatus.isSyncing ? Palette.accent : Palette.inkDim)
+                Text(CloudStatus.label)
+                    .font(.subheadline.weight(.semibold))
+            }
+            .accessibilityIdentifier("cloudStatus")
+            .accessibilityElement(children: .combine)
+
             Button {
                 showBackup = true
             } label: {
@@ -223,7 +232,7 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("showBackup")
         } footer: {
-            Text("保存した記録をまとめて書き出し、あとから戻せます。機種変更のときはこれを使ってください。書き出し（CSV）は人が読むためのもので、そこからは戻せません。")
+            Text("\(CloudStatus.detail)\n\n「バックアップ」では、保存した記録をまとめて書き出して、あとから戻せます。書き出し（CSV）は人が読むためのもので、そこからは戻せません。")
         }
     }
 

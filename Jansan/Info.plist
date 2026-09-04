@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- CloudKit の同期は、変更を知らせる無音の通知で起きる。
+	     これが無いと、アプリを開いている間しか同期しない。
+	     INFOPLIST_KEY_UIBackgroundModes は Xcode の生成する Info.plist に
+	     反映されなかったため、この土台に直接書いている（設定は認識されるのに出力されない）。
+
+	     置き場所は .xcodeproj と同じ階層。同期フォルダ（Jansan/Jansan/）に置くと
+	     資源としてもコピーされ、「Multiple commands produce Info.plist」で止まる。 -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+</dict>
+</plist>

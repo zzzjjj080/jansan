@@ -29,11 +29,10 @@ struct JansanApp: App {
     /// 片方だけ変えると、同期しないのに CloudKit のエラーがログに出続けるか、
     /// エンタイトルメントがあるのに同期しないかのどちらかになる。
     ///
-    /// **いまは false。** CloudKitコンテナ `iCloud.com.zzzjjj080.Jansan` が
-    /// まだ Apple 側に作られていないため。コンテナの作成は App Store Connect API に
-    /// 口が無く、Xcode か developer.apple.com からしか作れない（引き継ぎ書 4-28）。
-    /// 作られたら、ここと `CODE_SIGN_ENTITLEMENTS` を同時に戻す。
-    private static let useICloudSync = false
+    /// コンテナ `iCloud.com.zzzjjj080.Jansan` は 2026-09-05 に作成済み。
+    /// コンテナの作成だけは App Store Connect API に口が無く、
+    /// Xcode か developer.apple.com からしか作れない（引き継ぎ書 4-70b）。
+    private static let useICloudSync = true
 
     /// 保存先。
     ///
@@ -54,9 +53,11 @@ struct JansanApp: App {
         // iCloudにサインインしていない端末でも、同期しないだけで普通に動く。
         // **そこで失敗して記録を触れなくするわけにはいかない**ので、必ず端末内保存へ落とす
         if useICloudSync, let container = try? make(.automatic) {
+            CloudStatus.isSyncing = true
             return container
         }
         do {
+            CloudStatus.isSyncing = false
             return try make(.none)
         } catch {
             fatalError("保存先を用意できませんでした: \(error)")
@@ -68,5 +69,30 @@ struct JansanApp: App {
             ContentView()
         }
         .modelContainer(container)
+    }
+}
+
+
+/// iCloudに同期しているかどうか。
+///
+/// 利用者から見て「自分の記録が守られているか」は知りたいことなので、
+/// 設定に出す。**同期が始まっているかを外から確かめる手段が他に無い**ため、
+/// 開発中の確認にもここを使う。
+enum CloudStatus {
+    /// 保存先を用意した時点で決まる。以後は変わらない
+    nonisolated(unsafe) static var isSyncing = false
+
+    static var label: String {
+        isSyncing ? "iCloudに同期しています" : "この端末にのみ保存しています"
+    }
+
+    static var detail: String {
+        isSyncing
+            ? "記録はお使いのiCloudにも保存されます。端末が壊れても、機種を変えても残ります。保存先はあなた専用の領域で、開発者からも他の利用者からも見えません。"
+            : "iCloudにサインインしていないか、同期が使えない状態です。記録はこの端末の中だけにあります。端末を失うと記録も失われるので、「バックアップ」から書き出して控えておくことをおすすめします。"
+    }
+
+    static var symbol: String {
+        isSyncing ? "checkmark.icloud.fill" : "icloud.slash"
     }
 }
