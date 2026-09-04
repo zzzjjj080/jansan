@@ -23,6 +23,8 @@ final class ScoreBoard {
     var isKeypadVisible = true
 
     private let haptics = Haptics()
+    /// 変更の直前の表を積んでおく。表ごと覚える方式（→ UndoStack）
+    private var undo = UndoStack<UndoPoint>()
     private var confirmTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
     private var context: ModelContext?
@@ -104,6 +106,8 @@ final class ScoreBoard {
 
     func load(_ game: SavedGame) {
         guard let restored = try? game.snapshot(), !restored.roster.activeNames.isEmpty else { return }
+        // 読み込みは入力中の表を丸ごと置き換える。押し間違えたときに戻せるようにしておく
+        markUndoPoint()
         roster = restored.roster
         session = restored.session
         autoConfirm = restored.autoConfirm
@@ -213,6 +217,7 @@ final class ScoreBoard {
             return
         }
         guard session.rounds[position.round].entries[position.column] != .empty else { return }
+        markUndoPoint()
         session.clear(at: position)
         isNegative = false
         haptics.confirm()
@@ -227,6 +232,7 @@ final class ScoreBoard {
 
     func pressRest() {
         guard let position = selection else { return }
+        markUndoPoint()
         session.toggleResting(at: position)
         haptics.confirm()
         advance(from: position)
@@ -235,6 +241,7 @@ final class ScoreBoard {
     func commit() {
         guard let position = selection, let value = pendingValue else { return }
         confirmTask?.cancel()
+        markUndoPoint()
         session.enter(value, at: position)
         haptics.confirm()
 
@@ -249,6 +256,35 @@ final class ScoreBoard {
     func closeKeypad() {
         isKeypadVisible = false
         deselect()
+    }
+
+    // MARK: - 取り消し
+
+    /// 表と名簿の組。片方だけ戻すと列と点数の対応が壊れるので必ず一緒に扱う
+    private struct UndoPoint: Sendable {
+        var session: Session
+        var roster: Roster
+    }
+
+    var canUndo: Bool { undo.canUndo }
+
+    /// 表を変える**直前**に呼ぶ。呼び忘れるとその操作は戻せないだけで、壊れはしない
+    private func markUndoPoint() {
+        undo.push(UndoPoint(session: session, roster: roster))
+    }
+
+    /// 直前の操作を取り消す。
+    ///
+    /// 入力中の数字は巻き戻しても意味がないので捨てる。
+    /// 選択も外す。戻した先にそのマスがあるとは限らないため。
+    func undoLastChange() {
+        guard let point = undo.pop() else { return }
+        confirmTask?.cancel()
+        session = point.session
+        roster = point.roster
+        deselect()
+        haptics.confirm()
+        scheduleDraftSave()
     }
 
     // MARK: - 名簿
@@ -282,6 +318,7 @@ final class ScoreBoard {
     /// 上限や最後の1人の制約で切り替えられなかった場合は false
     @discardableResult
     func toggleActive(id: Roster.Member.ID) -> Bool {
+        markUndoPoint()
         let changed = roster.toggleActive(id: id)
         if changed { syncPlayers() }
         return changed
@@ -293,18 +330,21 @@ final class ScoreBoard {
     }
 
     func removeMember(id: Roster.Member.ID) {
+        markUndoPoint()
         roster.remove(id: id)
         syncPlayers()
     }
 
     /// 表の行そのものを消す。入れ間違えた局の取り消し用
     func removeRound(at index: Int) {
+        markUndoPoint()
         session.removeRound(at: index)
         haptics.confirm()
         deselect()
     }
 
     func resetSession() {
+        markUndoPoint()
         session.reset()
         deselect()
     }

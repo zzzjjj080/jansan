@@ -16,6 +16,15 @@ struct HistoryView: View {
 
     @State private var pendingLoad: SavedGame?
     @State private var pendingDelete: SavedGame?
+    @State private var editing: SavedGame?
+    @State private var query = ""
+
+    /// 記録が増えると一覧から目当てを探せなくなる。名前・メモ・日付のどれでも引ける
+    private var shown: [SavedGame] {
+        let key = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !key.isEmpty else { return records }
+        return records.filter { $0.searchText.contains(key) }
+    }
 
     var body: some View {
         NavigationStack {
@@ -26,15 +35,18 @@ struct HistoryView: View {
                         systemImage: "tray",
                         description: Text("「保存」を押すと、その時点の表が日付付きで残ります。")
                     )
+                } else if shown.isEmpty {
+                    ContentUnavailableView.search(text: query)
                 } else {
                     List {
-                        ForEach(records) { record in
+                        ForEach(shown) { record in
                             row(record)
                         }
                         .onDelete(perform: delete)
                     }
                 }
             }
+            .searchable(text: $query, prompt: "名前・メモ・日付で探す")
             .navigationTitle("保存した記録")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -42,6 +54,9 @@ struct HistoryView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("閉じる") { dismiss() }
                 }
+            }
+            .sheet(item: $editing) { record in
+                RecordEditView(record: record)
             }
             .alert("この記録を読み込みますか", isPresented: presenting($pendingLoad)) {
                 Button("キャンセル", role: .cancel) { pendingLoad = nil }
@@ -85,11 +100,27 @@ struct HistoryView: View {
                     Text(record.summaryLine)
                         .font(.system(size: 12))
                         .foregroundStyle(Palette.inkDim)
+
+                    if !record.note.isEmpty {
+                        Label(record.note, systemImage: "text.quote")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Palette.toneAInk)
+                            .lineLimit(2)
+                    }
                 }
             }
             .buttonStyle(.plain)
 
             Spacer(minLength: 8)
+
+            Button {
+                editing = record
+            } label: {
+                Image(systemName: "square.and.pencil")
+                    .foregroundStyle(Palette.accent)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("日付とメモを編集")
 
             // スワイプに気づかなくても消せるよう、明示的な削除ボタンも置く
             Button {
@@ -110,9 +141,11 @@ struct HistoryView: View {
         )
     }
 
+    /// 検索で絞っているときは、画面に出ている並びから消す。
+    /// records の添字で消すと**別の記録が消える**
     private func delete(at offsets: IndexSet) {
         for index in offsets {
-            context.delete(records[index])
+            context.delete(shown[index])
         }
         try? context.save()
     }

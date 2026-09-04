@@ -73,6 +73,17 @@ struct ContentView: View {
             Spacer()
             // テンキーを閉じてもマスをタップすれば開くので、開き直すボタンは置かない
             HStack(spacing: 18) {
+                // 戻せるものが無いときは薄く出す。消すと他のボタンの位置がずれて押し間違えるため
+                Button {
+                    board.undoLastChange()
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                }
+                .disabled(!board.canUndo)
+                .opacity(board.canUndo ? 1 : 0.3)
+                .accessibilityIdentifier("undo")
+                .accessibilityLabel("取り消す")
+
                 Button {
                     showStats = true
                 } label: {
