@@ -209,3 +209,38 @@ final class NewFeaturesUITests: XCTestCase {
         attach(app, "削除後")
     }
 }
+
+// MARK: - 一括スクショ
+
+extension NewFeaturesUITests {
+
+    /// 3枚の画像が作られ、共有と保存の導線が出ること
+    func testShareImagesMakesThreePictures() {
+        let app = launchApp()
+        makeRecords(app, count: 2)
+
+        app.buttons["chart.line.uptrend.xyaxis"].tap()
+        XCTAssertTrue(app.navigationBars["ビュー"].waitForExistence(timeout: 15))
+        app.buttons["showAllStats"].tap()
+        XCTAssertTrue(app.navigationBars["全記録のビュー"].waitForExistence(timeout: 15))
+
+        let make = app.buttons["makeImages"]
+        XCTAssertTrue(make.waitForExistence(timeout: 10), "画像の導線が無い")
+        make.tap()
+
+        XCTAssertTrue(app.navigationBars["画像で送る"].waitForExistence(timeout: 20), "画像の画面が開かない")
+        XCTAssertTrue(app.buttons["shareImages"].waitForExistence(timeout: 20), "共有の導線が無い")
+        XCTAssertTrue(app.buttons["saveToPhotos"].exists, "写真に保存の導線が無い")
+
+        // 3枚できていること。ボタンのアイコンも images に入るので、識別子で数える
+        for index in 0..<3 {
+            XCTAssertTrue(app.images["sharePreview\(index)"].waitForExistence(timeout: 15),
+                          "\(index + 1)枚目ができていない")
+        }
+        XCTAssertFalse(app.images["sharePreview3"].exists, "4枚目ができている")
+        attach(app, "画像で送る")
+
+        app.swipeUp()
+        attach(app, "画像で送る-2枚目以降")
+    }
+}

@@ -18,6 +18,7 @@ struct AllStatsView: View {
     @State private var playerCount: Int?
     @State private var decimalMode: Bool?
     @State private var soloed: String?
+    @State private var showImages = false
 
     /// 画面に出す期間の選択肢。Core の StatsPeriod は custom を持つが、
     /// ここでは日付の入力欄を作らず、よく使う範囲だけに絞る
@@ -109,9 +110,30 @@ struct AllStatsView: View {
             .navigationTitle("全記録のビュー")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    Button {
+                        showImages = true
+                    } label: {
+                        Label("画像で送る", systemImage: "photo.on.rectangle.angled")
+                    }
+                    .disabled(stats.isEmpty)
+                    .accessibilityIdentifier("makeImages")
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("閉じる") { dismiss() }
                 }
+            }
+            .sheet(isPresented: $showImages) {
+                ShareImagesSheet(
+                    title: "麻雀の成績",
+                    subtitle: "\(period.label)・\(playerCount.map { "\($0)人打ち" } ?? "すべて")・\(selected.count)対局",
+                    latest: latestRows,
+                    latestHeaders: ["順位", "点数"],
+                    totals: totalsRows,
+                    totalsHeaders: ["対局", "合計", "平着", "トップ"],
+                    series: series.map { (name: $0.id, color: $0.color, points: $0.points) },
+                    decimalMode: displayDecimalMode
+                )
             }
         }
         .onAppear {
@@ -120,6 +142,40 @@ struct AllStatsView: View {
                 let counts = games.map(\.playerCount)
                 playerCount = counts.mostCommon() ?? availableCounts.last
             }
+        }
+    }
+
+    // MARK: - 画像に載せる中身
+
+    /// ①直近の対局。いちばん新しい対局の着順と点数
+    private var latestRows: [ShareImageView.Row] {
+        guard let last = selected.max(by: { $0.playedAt < $1.playedAt }) else { return [] }
+        let ranked = last.session.playerStats()
+            .filter { $0.played > 0 }
+            .sorted { $0.total > $1.total }
+        return ranked.enumerated().map { index, stat in
+            ShareImageView.Row(
+                name: stat.name,
+                color: Palette.playerColors[index % Palette.playerColors.count],
+                values: ["\(index + 1)位",
+                         ScoreFormatter.signedString(stat.total, decimalMode: last.session.decimalMode)],
+                isNegative: [false, stat.total < 0]
+            )
+        }
+    }
+
+    /// ②期間の累計
+    private var totalsRows: [ShareImageView.Row] {
+        stats.enumerated().map { index, stat in
+            ShareImageView.Row(
+                name: stat.name,
+                color: Palette.playerColors[index % Palette.playerColors.count],
+                values: ["\(stat.games)",
+                         ScoreFormatter.signedString(stat.total, decimalMode: displayDecimalMode),
+                         stat.averageRank.map { String(format: "%.2f", $0) } ?? "–",
+                         percent(stat.topRate)],
+                isNegative: [false, stat.total < 0, false, false]
+            )
         }
     }
 
