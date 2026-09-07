@@ -9,10 +9,17 @@ import JansanCore
 /// **人数を必ず選ばせる。** 3人局と4人局を混ぜると着順率の分母が変わり、
 /// 数字の意味が壊れる。表示モードも同じ理由で分ける（混ぜると10倍ズレる）。
 struct AllStatsView: View {
+    /// 絞るディレクトリ。nil なら全部
+    var directory: Directory? = nil
     @Environment(\.dismiss) private var dismiss
 
     @Query(filter: #Predicate<SavedGame> { !$0.isDraft }, sort: \SavedGame.savedAt, order: .reverse)
-    private var records: [SavedGame]
+    private var allRecords: [SavedGame]
+
+    private var records: [SavedGame] {
+        guard let directory else { return allRecords }
+        return allRecords.filter { ($0.directoryId ?? Directory.defaultUID) == directory.uid }
+    }
 
     @State private var period: Period = .all
     @State private var playerCount: Int?
@@ -107,7 +114,7 @@ struct AllStatsView: View {
                 .padding(16)
             }
             .background(Palette.bg)
-            .navigationTitle("全記録のビュー")
+            .navigationTitle(directory.map { "\($0.name)の集計" } ?? "全記録のビュー")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigation) {
@@ -125,7 +132,7 @@ struct AllStatsView: View {
             }
             .sheet(isPresented: $showImages) {
                 ShareImagesSheet(
-                    title: "麻雀の成績",
+                    title: directory?.name ?? "麻雀の成績",
                     subtitle: "\(period.label)・\(playerCount.map { "\($0)人打ち" } ?? "すべて")・\(selected.count)対局",
                     latest: latestRows,
                     latestHeaders: ["順位", "点数"],

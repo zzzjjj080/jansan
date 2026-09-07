@@ -1,9 +1,11 @@
 import SwiftUI
 import SwiftData
 
+/// ディレクトリ1つぶんの記録の一覧。DirectoryView の中身として置かれる
 struct HistoryView: View {
     let board: ScoreBoard
-    @Environment(\.dismiss) private var dismiss
+    let directory: Directory
+    var goToInput: () -> Void = {}
     @Environment(\.modelContext) private var context
 
     // 下書き(作業中の状態)は履歴に出さない
@@ -12,7 +14,12 @@ struct HistoryView: View {
         sort: \SavedGame.savedAt,
         order: .reverse
     )
-    private var records: [SavedGame]
+    private var allRecords: [SavedGame]
+
+    /// このディレクトリの分だけ。directoryId が nil の古い記録は「マイ記録」
+    private var records: [SavedGame] {
+        allRecords.filter { ($0.directoryId ?? Directory.defaultUID) == directory.uid }
+    }
 
     @State private var pendingLoad: SavedGame?
     @State private var pendingDelete: SavedGame?
@@ -27,13 +34,15 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        Group {
             Group {
                 if records.isEmpty {
                     ContentUnavailableView(
                         "まだ記録がありません",
                         systemImage: "tray",
-                        description: Text("「保存」を押すと、その時点の表が日付付きで残ります。")
+                        description: Text(directory.isSubscribed
+                                          ? "送り主がまだ記録を入れていません。"
+                                          : "入力画面の保存ボタン（下向き矢印）を押すと、その時点の表が日付付きでここに残ります。")
                     )
                 } else if shown.isEmpty {
                     ContentUnavailableView.search(text: query)
@@ -46,15 +55,10 @@ struct HistoryView: View {
                     }
                 }
             }
-            .searchable(text: $query, prompt: "名前・メモ・日付で探す")
-            .navigationTitle("保存した記録")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                // 各行のゴミ箱ボタンとスワイプ削除で用は足りるので、EditButtonは置かない
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("閉じる") { dismiss() }
-                }
-            }
+            // 大見出しの画面では、既定だと検索欄が引っ込んで下に引かないと出ない。常に出す
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: "名前・メモ・日付で探す")
+            .listStyle(.insetGrouped)
             .sheet(item: $editing) { record in
                 RecordEditView(record: record)
             }
@@ -63,7 +67,7 @@ struct HistoryView: View {
                 Button("読み込む") {
                     if let record = pendingLoad { board.load(record) }
                     pendingLoad = nil
-                    dismiss()
+                    goToInput()
                 }
             } message: {
                 Text("現在入力中の内容は上書きされます。")
@@ -113,23 +117,28 @@ struct HistoryView: View {
 
             Spacer(minLength: 8)
 
-            Button {
-                editing = record
-            } label: {
-                Image(systemName: "square.and.pencil")
-                    .foregroundStyle(Palette.accent)
+            if directory.isEditable {
+                Button {
+                    editing = record
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                        .foregroundStyle(Palette.accent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("日付とメモを編集")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("日付とメモを編集")
 
-            // スワイプに気づかなくても消せるよう、明示的な削除ボタンも置く
-            Button {
-                pendingDelete = record
-            } label: {
-                Image(systemName: "trash")
-                    .foregroundStyle(Palette.negative)
+            // スワイプに気づかなくても消せるよう、明示的な削除ボタンも置く。
+            // 受け取ったものは消さない。「最新を受け取る」で戻ってくるだけなので
+            if directory.isEditable {
+                Button {
+                    pendingDelete = record
+                } label: {
+                    Image(systemName: "trash")
+                        .foregroundStyle(Palette.negative)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -144,13 +153,23 @@ struct HistoryView: View {
     /// 検索で絞っているときは、画面に出ている並びから消す。
     /// records の添字で消すと**別の記録が消える**
     private func delete(at offsets: IndexSet) {
+        guard directory.isEditable else { return }
         for index in offsets {
             context.delete(shown[index])
         }
+        markDirty()
         try? context.save()
     }
 
+    private func markDirty() {
+        if directory.isShared {
+            directory.needsPublish = true
+            directory.updatedAt = .now
+        }
+    }
+
     private func remove(_ record: SavedGame) {
+        markDirty()
         context.delete(record)
         try? context.save()
     }

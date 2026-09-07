@@ -4,8 +4,8 @@ import JansanCore
 
 struct SettingsView: View {
     let board: ScoreBoard
-    @Binding var showHistory: Bool
     @Binding var appTheme: AppTheme
+    @State private var showExport = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
 
@@ -39,6 +39,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showHowTo) {
                 HowToView()
+            }
+            .sheet(isPresented: $showExport) {
+                ExportView(board: board)
             }
             .sheet(isPresented: $showBackup) {
                 BackupView(board: board)
@@ -183,28 +186,14 @@ struct SettingsView: View {
     private var recordSection: some View {
         Section {
             Button {
-                board.archiveCurrentGame()
-                didSave = true
-                Task {
-                    try? await Task.sleep(for: .seconds(1.8))
-                    didSave = false
-                }
+                showExport = true
             } label: {
-                Label(
-                    didSave ? "保存しました" : "この対局を記録に残す",
-                    systemImage: didSave ? "checkmark.circle.fill" : "square.and.arrow.down"
-                )
-                .foregroundStyle(didSave ? Palette.accent : Color.accentColor)
-            }
-
-            Button("保存した記録を見る") {
-                dismiss()
-                showHistory = true
+                Label("いまの表をCSVで書き出す", systemImage: "square.and.arrow.up")
             }
         } header: {
-            Text("記録")
+            Text("書き出し")
         } footer: {
-            Text("入力中の内容は自動で保存されるので、アプリを閉じても続きから再開できます。ここで残す「記録」は別枠で、後から振り返りたい対局を日付付きで取っておくためのものです。")
+            Text("入力中の表を、表計算ソフトなどで読める形にします。人が読むためのもので、ここからは戻せません。記録を残すのは入力画面の保存ボタン、控えを取るのは「バックアップ」です。")
         }
     }
 

@@ -94,11 +94,20 @@ final class ScoreBoard {
     }
 
     /// 「保存」で記録として残す。作業中の下書きとは別枠で積まれる
-    func archiveCurrentGame() {
+    /// いまの表を記録として残す。`directoryId` が nil なら「マイ記録」に入る
+    func archiveCurrentGame(into directoryId: UUID? = nil) {
         guard let context else { return }
         do {
-            context.insert(try SavedGame(snapshot: snapshot, isDraft: false))
+            let record = try SavedGame(snapshot: snapshot, isDraft: false)
+            record.directoryId = directoryId
+            context.insert(record)
             try context.save()
+            // 共有中のディレクトリなら、次に送るものがあると印を付ける
+            if let directoryId, let dir = DirectoryStore.directory(uid: directoryId, in: context), dir.isShared {
+                dir.needsPublish = true
+                dir.updatedAt = .now
+                try context.save()
+            }
         } catch {
             print("記録の保存に失敗: \(error)")
         }

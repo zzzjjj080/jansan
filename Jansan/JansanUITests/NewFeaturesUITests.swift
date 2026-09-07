@@ -3,7 +3,7 @@ import XCTest
 /// 1.3 で足した機能を、実際にタップして確かめる。
 ///
 /// 記録が要るテストは、デバッグ用の「デモデータ」で表を作ってから
-/// 設定の「この対局を記録に残す」で保存して用意する。
+/// 入力画面の保存ボタンで保存して用意する。
 final class NewFeaturesUITests: XCTestCase {
 
     override func setUp() {
@@ -54,12 +54,20 @@ final class NewFeaturesUITests: XCTestCase {
             XCTAssertTrue(scrollTo(app, seed), "デモデータのボタンが無い（Debugビルドで走らせること）")
             seed.tap()
 
-            openSettings(app)
-            let save = app.buttons["この対局を記録に残す"]
-            XCTAssertTrue(scrollTo(app, save), "保存ボタンが無い")
+            // 保存は入力画面の右上に移った
+            let save = app.buttons["saveGame"]
+            XCTAssertTrue(save.waitForExistence(timeout: 10), "保存ボタンが無い")
             save.tap()
-            app.navigationBars["設定"].buttons["完了"].tap()
         }
+    }
+
+    /// 記録タブを開いて「マイ記録」に入る
+    private func openMyRecords(_ app: XCUIApplication) {
+        app.tabBars.buttons["記録"].tap()
+        let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
+        XCTAssertTrue(mine.waitForExistence(timeout: 10), "「マイ記録」が無い")
+        mine.tap()
+        XCTAssertTrue(app.navigationBars["マイ記録"].waitForExistence(timeout: 10), "マイ記録が開かない")
     }
 
     // MARK: - 取り消し
@@ -91,11 +99,7 @@ final class NewFeaturesUITests: XCTestCase {
         let app = launchApp()
         makeRecords(app, count: 1)
 
-        openSettings(app)
-        let openHistory = app.buttons["保存した記録を見る"]
-        XCTAssertTrue(scrollTo(app, openHistory), "履歴への導線が無い")
-        openHistory.tap()
-        XCTAssertTrue(app.navigationBars["保存した記録"].waitForExistence(timeout: 15), "履歴が開かない")
+        openMyRecords(app)
 
         // 日付とメモを編集
         let edit = app.buttons["日付とメモを編集"].firstMatch
@@ -139,10 +143,12 @@ final class NewFeaturesUITests: XCTestCase {
         app.buttons["showAllStats"].tap()
         XCTAssertTrue(app.navigationBars["全記録のビュー"].waitForExistence(timeout: 15), "全記録のビューが開かない")
 
-        // 2対局ぶん集計されている
-        XCTAssertTrue(app.staticTexts.containing(
-            NSPredicate(format: "label CONTAINS '2 対局'")).firstMatch.waitForExistence(timeout: 10),
-            "対局数が出ていない")
+        // 少なくとも今作った2対局は集計されている。
+        // 「全記録」は他のディレクトリも合算するので、前のテストが残した分が上乗せされうる
+        let summary = app.staticTexts.matching(NSPredicate(format: "label MATCHES '^[0-9]+ 対局.*'")).firstMatch
+        XCTAssertTrue(summary.waitForExistence(timeout: 10), "対局数が出ていない")
+        let count = Int(summary.label.split(separator: " ").first ?? "") ?? 0
+        XCTAssertGreaterThanOrEqual(count, 2, "対局数が足りない: \(summary.label)")
         XCTAssertTrue(app.buttons["periodPicker"].waitForExistence(timeout: 5)
                       || app.segmentedControls.firstMatch.exists, "期間の切り替えが無い")
         attach(app, "全記録のビュー")
@@ -201,10 +207,7 @@ final class NewFeaturesUITests: XCTestCase {
         app.alerts.buttons["OK"].tap()
 
         // 履歴が空になっている
-        openSettings(app)
-        let openHistory = app.buttons["保存した記録を見る"]
-        XCTAssertTrue(scrollTo(app, openHistory), "履歴への導線が無い")
-        openHistory.tap()
+        openMyRecords(app)
         XCTAssertTrue(app.staticTexts["まだ記録がありません"].waitForExistence(timeout: 15), "記録が残っている")
         attach(app, "削除後")
     }

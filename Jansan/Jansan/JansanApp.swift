@@ -43,7 +43,7 @@ struct JansanApp: App {
     /// 同期を切っていても、切り替えたときにそのまま動くよう、
     /// モデル側の制約は満たしたままにしてある。
     private let container: ModelContainer = {
-        let schema = Schema([SavedGame.self])
+        let schema = Schema([SavedGame.self, Directory.self])
 
         func make(_ database: ModelConfiguration.CloudKitDatabase) throws -> ModelContainer {
             try ModelContainer(for: schema,
@@ -66,7 +66,7 @@ struct JansanApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
         }
         .modelContainer(container)
     }

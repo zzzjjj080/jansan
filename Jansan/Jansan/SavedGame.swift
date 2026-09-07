@@ -38,6 +38,11 @@ final class SavedGame {
     /// ひとことメモ。場所・面子・その日の出来事など
     var note: String = ""
 
+    /// 所属するディレクトリ。**nil は「マイ記録」。** 既存の記録は全部 nil で入ってくる。
+    /// SwiftData の関係にせず UUID で持つ。CloudKit 同期では関係は省略可でないと
+    /// いけない制約があり、UUID の方が単純で壊れにくい
+    var directoryId: UUID?
+
     /// 表示や集計に使う対局日。未設定なら保存日時で代用する
     var effectivePlayedAt: Date { playedAt ?? savedAt }
 
