@@ -32,8 +32,8 @@ final class DirectoryUITests: XCTestCase {
     private func openRecordsTab(_ app: XCUIApplication) {
         // 起動直後は「マイ記録」の用意や復元が走っている。入力画面が出そろうまで待ってから押す
         XCTAssertTrue(app.buttons["openSettings"].waitForExistence(timeout: 20), "入力画面が出ない")
-        let tab = app.tabBars.buttons["記録"]
-        XCTAssertTrue(tab.waitForExistence(timeout: 10), "記録タブが無い")
+        let tab = app.segmentedControls.firstMatch.buttons["記録"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 10), "「記録」の切り替えが無い")
         // タブのタップは起動直後の処理に飲まれることがある。効かなければ1回だけ押し直す
         for _ in 0..<2 {
             tab.tap()
@@ -79,7 +79,7 @@ final class DirectoryUITests: XCTestCase {
     func testStartsOnInputAndHasDefaultDirectory() {
         let app = launchApp()
         XCTAssertTrue(app.buttons["openSettings"].waitForExistence(timeout: 20), "起動時に入力画面になっていない")
-        XCTAssertTrue(app.tabBars.buttons["入力"].isSelected, "入力タブが選ばれていない")
+        XCTAssertTrue(app.segmentedControls.firstMatch.buttons["入力"].isSelected, "「入力」が選ばれていない")
 
         openRecordsTab(app)
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'"))
@@ -103,7 +103,7 @@ final class DirectoryUITests: XCTestCase {
         makeCurrentDirectory(app)
 
         // 入力へ戻って、見出しに保存先が出ていること
-        app.tabBars.buttons["入力"].tap()
+        app.segmentedControls.firstMatch.buttons["入力"].tap()
         let caption = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "保存先: " + name)).firstMatch
         if !caption.waitForExistence(timeout: 10) {
             let d = XCTAttachment(string: app.debugDescription)
@@ -210,7 +210,7 @@ final class DirectoryUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["記録"].waitForExistence(timeout: 10), "一覧に戻らない")
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch.exists, "消えていない")
 
-        app.tabBars.buttons["入力"].tap()
+        app.segmentedControls.firstMatch.buttons["入力"].tap()
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '保存先: マイ記録'"))
                         .firstMatch.waitForExistence(timeout: 10), "保存先がマイ記録に戻っていない")
     }

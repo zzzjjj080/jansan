@@ -106,7 +106,7 @@ struct AllStatsView: View {
                         summary
                         heading("成績")
                         ScrollView(.horizontal, showsIndicators: false) { table }
-                        heading("推移（対局ごとの累計）")
+                        heading("推移（局ごとの累計）")
                         chart
                         legend
                     }
@@ -384,7 +384,7 @@ struct AllStatsView: View {
             }
     }
 
-    /// 目盛りの位置。対局数は整数なので、小数のラベルが出ないよう自分で並べる
+    /// 目盛りの位置。局数は整数なので、小数のラベルが出ないよう自分で並べる
     private var xTicks: [Int] {
         let count = series.first?.points.count ?? 0
         guard count > 0 else { return [0] }
@@ -396,9 +396,12 @@ struct AllStatsView: View {
         Chart {
             ForEach(series) { line in
                 ForEach(line.plotted) { point in
+                    // series: を渡さないと、全員の点が1本の線として繋がってしまう。
+                    // 型チェック回避で .foregroundStyle(by:) を外したときに、この役目も一緒に消えていた
                     LineMark(
-                        x: .value("対局", point.index),
-                        y: .value("累計", point.value)
+                        x: .value("局", point.index),
+                        y: .value("累計", point.value),
+                        series: .value("名前", line.id)
                     )
                     .foregroundStyle(line.color)
                     .opacity(opacity(for: line.id))

@@ -145,7 +145,9 @@ struct ShareImageView: View {
         Chart {
             ForEach(Array(series.enumerated()), id: \.offset) { _, line in
                 ForEach(points(line.points)) { point in
-                    LineMark(x: .value("対局", point.index), y: .value("累計", point.value))
+                    // series: が無いと全員の点が1本に繋がる（AllStatsView と同じ）
+                    LineMark(x: .value("局", point.index), y: .value("累計", point.value),
+                             series: .value("名前", line.name))
                         .foregroundStyle(line.color)
                         .lineStyle(StrokeStyle(lineWidth: 3))
                 }

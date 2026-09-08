@@ -158,10 +158,14 @@ public enum Aggregator {
         }
     }
 
-    /// 対局をまたいだ累計収支の推移。返すのは名前ごとの折れ線。
+    /// 対局をまたいだ累計収支の推移。**1局ごとに1点**を打つ。
     ///
-    /// 横軸は対局の並び順（古い順）。その対局に出ていない人は前の値を引き継ぐので、
-    /// 線が途切れずに読める。
+    /// 対局（表）ごとに1点だと、1回の卓で20局打っても点が1つしか増えず、
+    /// 表の中の推移と手触りが変わってしまう。表の中のグラフ（`Session.cumulativeTotals`）と
+    /// 同じ粒度にして、対局をまたいでもそのまま繋がるようにする。
+    ///
+    /// その局に出ていない人は前の値を引き継ぐので、線が途切れない。
+    /// 途中から現れた人は、それまでを 0 で埋めて長さを揃える。
     public static func cumulative(
         games: [GameForStats],
         period: StatsPeriod = .all,
@@ -177,19 +181,27 @@ public enum Aggregator {
         var order: [String] = []
         var running = [String: Int]()
         var series = [String: [Int]]()
+        var length = 0
 
         for game in targets {
-            for stat in game.session.playerStats() where stat.played > 0 {
-                if order.contains(stat.name) == false {
-                    order.append(stat.name)
-                    // 途中から現れた人は、それまでを0で埋めて長さを揃える
-                    series[stat.name] = Array(repeating: 0, count: series.values.first?.count ?? 0)
-                    running[stat.name] = 0
+            let players = game.session.players
+            // 全員の点が入った局だけ。入力途中の局は数えない（Stats と同じ基準）
+            let completed = game.session.rounds.filter { $0.isComplete && !$0.playingColumns.isEmpty }
+            for round in completed {
+                for (column, name) in players.enumerated() {
+                    if order.contains(name) == false {
+                        order.append(name)
+                        series[name] = Array(repeating: 0, count: length)
+                        running[name] = 0
+                    }
+                    if let value = round.entries[column].value {
+                        running[name, default: 0] += value
+                    }
                 }
-                running[stat.name, default: 0] += stat.total
-            }
-            for name in order {
-                series[name, default: []].append(running[name] ?? 0)
+                for name in order {
+                    series[name, default: []].append(running[name] ?? 0)
+                }
+                length += 1
             }
         }
 

@@ -137,15 +137,37 @@ struct StatsPeriodTests {
 @Suite("累計収支の推移（対局をまたぐ）")
 struct CumulativeTests {
 
-    @Test("対局ごとに積み上がる")
-    func accumulates() {
+    /// 1局ずつ入れた表を作る
+    private func multiRoundGame(_ players: [String], rounds: [[Int]], daysAgo: Int) -> GameForStats {
+        var session = Session(players: players)
+        for (r, scores) in rounds.enumerated() {
+            for (column, value) in scores.enumerated().dropLast() {
+                session.enter(value, at: Position(round: r, column: column))
+            }
+        }
+        let date = Calendar.current.date(byAdding: .day, value: -daysAgo,
+                                         to: Date(timeIntervalSince1970: 1_700_000_000))!
+        return GameForStats(playedAt: date, session: session)
+    }
+
+    @Test("局ごとに1点ずつ積み上がる。対局ごとではない")
+    func accumulatesPerRound() {
         let games = [
-            game(yonma, [30, 10, -10, -30], daysAgo: 2),
-            game(yonma, [20, -5, -5, -10], daysAgo: 1),
+            multiRoundGame(yonma, rounds: [[30, 10, -10, -30], [20, -5, -5, -10]], daysAgo: 2),
+            multiRoundGame(yonma, rounds: [[-10, 10, 0, 0]], daysAgo: 1),
         ]
+        let nakamura = Aggregator.cumulative(games: games).first { $0.name == "中村" }
+        // 2局 + 1局 = 3点。対局ごとなら2点になってしまう
+        #expect(nakamura?.values == [30, 50, 40])
+    }
+
+    @Test("4人いれば4本の線が出る")
+    func oneLinePerPlayer() {
+        let games = [game(yonma, [30, 10, -10, -30])]
         let series = Aggregator.cumulative(games: games)
-        let nakamura = series.first { $0.name == "中村" }
-        #expect(nakamura?.values == [30, 50])
+        #expect(series.count == 4)
+        #expect(series.map(\.name) == yonma)
+        #expect(series.map { $0.values.last ?? 0 } == [30, 10, -10, -30])
     }
 
     @Test("途中から参加した人も線の長さが揃う")
@@ -160,7 +182,7 @@ struct CumulativeTests {
         #expect(series.first { $0.name == "石井" }?.values == [0, 40])
     }
 
-    @Test("出ていない対局では前の値を保つ")
+    @Test("出ていない局では前の値を保つ")
     func keepsPreviousValue() {
         let games = [
             game(yonma, [30, 10, -10, -30], daysAgo: 2),
@@ -168,5 +190,17 @@ struct CumulativeTests {
         ]
         let nakamura = Aggregator.cumulative(games: games).first { $0.name == "中村" }
         #expect(nakamura?.values == [30, 30])
+    }
+
+    @Test("入力途中の局は数えない")
+    func skipsIncompleteRounds() {
+        var session = Session(players: yonma)
+        session.enter(30, at: Position(round: 0, column: 0))
+        session.enter(10, at: Position(round: 0, column: 1))
+        session.enter(-10, at: Position(round: 0, column: 2))   // 4人目は逆算で埋まる → 完成
+        session.enter(5, at: Position(round: 1, column: 0))     // 2局目は途中
+        let g = GameForStats(playedAt: .now, session: session)
+        let nakamura = Aggregator.cumulative(games: [g]).first { $0.name == "中村" }
+        #expect(nakamura?.values == [30])
     }
 }

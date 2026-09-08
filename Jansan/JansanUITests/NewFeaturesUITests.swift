@@ -63,7 +63,7 @@ final class NewFeaturesUITests: XCTestCase {
 
     /// 記録タブを開いて「マイ記録」に入る
     private func openMyRecords(_ app: XCUIApplication) {
-        app.tabBars.buttons["記録"].tap()
+        app.segmentedControls.firstMatch.buttons["記録"].tap()
         let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
         XCTAssertTrue(mine.waitForExistence(timeout: 10), "「マイ記録」が無い")
         mine.tap()
