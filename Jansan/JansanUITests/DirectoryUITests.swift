@@ -215,3 +215,43 @@ final class DirectoryUITests: XCTestCase {
                         .firstMatch.waitForExistence(timeout: 10), "保存先がマイ記録に戻っていない")
     }
 }
+
+// MARK: - 閲覧専用
+
+extension DirectoryUITests {
+
+    /// 記録をタップしても入力中の表は置き換わらないこと。
+    /// 「見たい」と「続きを打ちたい」は別の用件なので、既定は見るだけ
+    func testTappingRecordOpensReadOnlyView() {
+        let app = launchApp()
+
+        // 入力に目印を1つ入れておく。これが残っていれば置き換わっていない
+        XCTAssertTrue(app.buttons["cell-0-0"].waitForExistence(timeout: 20))
+        app.buttons["cell-0-0"].tap()
+        for key in ["7", "7"] { app.buttons[key].firstMatch.tap() }
+        app.buttons["確定"].tap()
+        app.buttons["saveGame"].tap()
+
+        openRecordsTab(app)
+        let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
+        XCTAssertTrue(mine.waitForExistence(timeout: 10))
+        mine.tap()
+
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS '人打ち'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "記録の行が無い")
+        row.tap()
+
+        // 見るだけの帯が出て、入力用のマスは出ていない
+        XCTAssertTrue(app.staticTexts["保存した記録・見るだけ"].waitForExistence(timeout: 10),
+                      "見るだけの帯が出ていない")
+        XCTAssertFalse(app.buttons["cell-0-0"].exists, "閲覧画面に入力用のマスが出ている")
+        XCTAssertTrue(app.buttons["loadIntoInput"].exists, "「入力に読み込む」が無い")
+        attach(app, "閲覧専用")
+
+        app.buttons["閉じる"].firstMatch.tap()
+        app.segmentedControls.firstMatch.buttons["入力"].tap()
+
+        // 入力の表は触られていない
+        XCTAssertEqual(app.buttons["cell-0-0"].value as? String, "77", "入力中の表が置き換わっている")
+    }
+}

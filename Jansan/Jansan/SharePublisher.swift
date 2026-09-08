@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import JansanCore
 
 /// 共有中のディレクトリに溜まった変更を送る。
 ///
@@ -16,6 +17,19 @@ enum SharePublisher {
         let pending = DirectoryStore.all(in: context).filter { $0.isShared && $0.needsPublish && !$0.isSubscribed }
         for directory in pending {
             await publish(directory, in: context)
+        }
+    }
+
+    /// 受け取っているディレクトリを全部、静かに取り直す。
+    /// 一覧を開いたときに走らせて、件数の表示が古いままにならないようにする
+    static func refreshSubscriptions(in context: ModelContext) async {
+        for directory in DirectoryStore.all(in: context) where directory.isSubscribed {
+            guard let doc = try? await ShareClient.fetch(id: directory.shareID,
+                                                        password: directory.sharePassword) else { continue }
+            directory.name = doc.name
+            directory.decimalMode = doc.decimalMode
+            directory.lastFetchedAt = .now
+            DirectoryStore.replaceGames(of: directory, with: doc.backup, in: context)
         }
     }
 

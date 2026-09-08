@@ -101,6 +101,15 @@ final class NewFeaturesUITests: XCTestCase {
 
         openMyRecords(app)
 
+        // 行をタップすると閲覧専用の画面が開く（入力の表は置き換わらない）
+        let firstRow = app.buttons.matching(NSPredicate(format: "label CONTAINS '人打ち'")).firstMatch
+        XCTAssertTrue(firstRow.waitForExistence(timeout: 10), "記録の行が無い")
+        firstRow.tap()
+        XCTAssertTrue(app.staticTexts["保存した記録・見るだけ"].waitForExistence(timeout: 10),
+                      "見るだけの帯が出ていない")
+        attach(app, "記録を見る")
+        app.buttons["閉じる"].firstMatch.tap()
+
         // 日付とメモを編集
         let edit = app.buttons["日付とメモを編集"].firstMatch
         XCTAssertTrue(edit.waitForExistence(timeout: 10), "編集ボタンが無い")

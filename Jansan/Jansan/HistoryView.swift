@@ -21,7 +21,7 @@ struct HistoryView: View {
         allRecords.filter { ($0.directoryId ?? Directory.defaultUID) == directory.uid }
     }
 
-    @State private var pendingLoad: SavedGame?
+    @State private var viewing: SavedGame?
     @State private var pendingDelete: SavedGame?
     @State private var editing: SavedGame?
     @State private var query = ""
@@ -62,15 +62,8 @@ struct HistoryView: View {
             .sheet(item: $editing) { record in
                 RecordEditView(record: record)
             }
-            .alert("この記録を読み込みますか", isPresented: presenting($pendingLoad)) {
-                Button("キャンセル", role: .cancel) { pendingLoad = nil }
-                Button("読み込む") {
-                    if let record = pendingLoad { board.load(record) }
-                    pendingLoad = nil
-                    goToInput()
-                }
-            } message: {
-                Text("現在入力中の内容は上書きされます。")
+            .sheet(item: $viewing) { record in
+                GameDetailView(record: record, directory: directory, board: board, goToInput: goToInput)
             }
             .alert("この記録を削除しますか", isPresented: presenting($pendingDelete)) {
                 Button("キャンセル", role: .cancel) { pendingDelete = nil }
@@ -87,7 +80,7 @@ struct HistoryView: View {
     private func row(_ record: SavedGame) -> some View {
         HStack {
             Button {
-                pendingLoad = record
+                viewing = record
             } label: {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {

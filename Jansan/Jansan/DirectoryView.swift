@@ -19,11 +19,33 @@ struct DirectoryView: View {
     @State private var renameText = ""
     @State private var refreshing = false
     @State private var refreshError: String?
+    /// 自動取得はこの画面に入ったとき1回だけ。開くたびに毎回は走らせない
+    @State private var didAutoRefresh = false
 
     private var isCurrent: Bool { directory.uid.uuidString == currentDirectoryID }
 
     var body: some View {
         HistoryView(board: board, directory: directory, goToInput: goToInput)
+            // 受け取ったディレクトリは、開いたら黙って最新を取りに行く。
+            // 手で「最新を受け取る」を押さないと更新されないのは、
+            // 押すことを知らない人には「壊れている」としか見えない
+            .task {
+                guard directory.isSubscribed, !didAutoRefresh else { return }
+                didAutoRefresh = true
+                await refresh(silent: true)
+            }
+            .refreshable {
+                if directory.isSubscribed { await refresh(silent: true) }
+            }
+            .overlay(alignment: .top) {
+                if refreshing {
+                    Label("最新を受け取っています…", systemImage: "arrow.clockwise")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(.bar, in: Capsule())
+                        .padding(.top, 6)
+                }
+            }
             .navigationTitle(directory.name)
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -65,7 +87,7 @@ struct DirectoryView: View {
                             Button {
                                 Task { await refresh() }
                             } label: {
-                                Label(refreshing ? "受け取っています…" : "最新を受け取る", systemImage: "arrow.clockwise")
+                                Label(refreshing ? "受け取っています…" : "いま最新を受け取る", systemImage: "arrow.clockwise")
                             }
                             .disabled(refreshing)
                             .accessibilityIdentifier("refreshSubscription")
@@ -124,7 +146,9 @@ struct DirectoryView: View {
             }
     }
 
-    private func refresh() async {
+    /// - Parameter silent: 自動での取得。失敗を画面に出さない
+    ///   （電波が無いだけのことが多く、開くたびに叱られるのは煩わしい）
+    private func refresh(silent: Bool = false) async {
         refreshing = true
         defer { refreshing = false }
         do {
@@ -134,9 +158,9 @@ struct DirectoryView: View {
             directory.lastFetchedAt = .now
             DirectoryStore.replaceGames(of: directory, with: doc.backup, in: context)
         } catch let failure as ShareClient.Failure {
-            refreshError = failure.message
+            if !silent { refreshError = failure.message }
         } catch {
-            refreshError = error.localizedDescription
+            if !silent { refreshError = error.localizedDescription }
         }
     }
 

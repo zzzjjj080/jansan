@@ -72,6 +72,14 @@ struct RecordsView: View {
             .sheet(isPresented: $showSubscribe) {
                 SubscribeView()
             }
+            // 一覧を開いたら、受け取っているものを静かに取り直す。
+            // 件数が古いままだと「更新されない」と見える
+            .task {
+                await SharePublisher.refreshSubscriptions(in: context)
+            }
+            .refreshable {
+                await SharePublisher.refreshSubscriptions(in: context)
+            }
         }
     }
 
