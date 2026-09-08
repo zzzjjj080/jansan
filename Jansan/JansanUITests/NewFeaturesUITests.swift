@@ -28,7 +28,12 @@ final class NewFeaturesUITests: XCTestCase {
         let gear = app.buttons["openSettings"]
         XCTAssertTrue(gear.waitForExistence(timeout: 20), "設定ボタンが無い")
         gear.tap()
-        XCTAssertTrue(app.navigationBars["設定"].waitForExistence(timeout: 15), "設定が開かない")
+        if !app.navigationBars["設定"].waitForExistence(timeout: 15) {
+            attach(app, "NG-設定が開かない")
+            let d = XCTAttachment(string: "hittable=\(gear.isHittable) frame=\(gear.frame)\n" + app.debugDescription)
+            d.name = "NG-設定が開かないときの要素"; d.lifetime = .keepAlways; add(d)
+            XCTFail("設定が開かない")
+        }
     }
 
     private func scrollToBottom(_ app: XCUIApplication, times: Int = 8) {
@@ -54,11 +59,25 @@ final class NewFeaturesUITests: XCTestCase {
             XCTAssertTrue(scrollTo(app, seed), "デモデータのボタンが無い（Debugビルドで走らせること）")
             seed.tap()
 
-            // 保存は入力画面の右上に移った
-            let save = app.buttons["saveGame"]
-            XCTAssertTrue(save.waitForExistence(timeout: 10), "保存ボタンが無い")
-            save.tap()
+            // 保存は入力画面の右上。押すと確認が1枚挟まる
+            tapSave(app)
         }
+    }
+
+    /// 保存ボタンを押して、確認まで通す
+    private func tapSave(_ app: XCUIApplication) {
+        let save = app.buttons["saveGame"]
+        XCTAssertTrue(save.waitForExistence(timeout: 10), "保存ボタンが無い")
+        save.tap()
+        // **アラートの中に限定する。** 単に label CONTAINS 'に残す' で探すと、
+        // ツールバーの保存ボタン自身（読み上げ名「この対局を記録に残す」）に当たって
+        // 保存されないまま通ってしまう
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 10), "保存の確認が出ない")
+        let confirm = alert.buttons.matching(NSPredicate(format: "label ENDSWITH 'に残す'")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "確認のボタンが無い")
+        confirm.tap()
+        XCTAssertFalse(alert.waitForExistence(timeout: 3), "確認が閉じていない")
     }
 
     /// 記録タブを開いて「マイ記録」に入る
@@ -146,7 +165,7 @@ final class NewFeaturesUITests: XCTestCase {
         let app = launchApp()
         makeRecords(app, count: 2)
 
-        app.buttons["chart.line.uptrend.xyaxis"].tap()
+        app.buttons["openStats"].tap()
         XCTAssertTrue(app.navigationBars["ビュー"].waitForExistence(timeout: 15), "ビューが開かない")
 
         app.buttons["showAllStats"].tap()
@@ -231,7 +250,7 @@ extension NewFeaturesUITests {
         let app = launchApp()
         makeRecords(app, count: 2)
 
-        app.buttons["chart.line.uptrend.xyaxis"].tap()
+        app.buttons["openStats"].tap()
         XCTAssertTrue(app.navigationBars["ビュー"].waitForExistence(timeout: 15))
         app.buttons["showAllStats"].tap()
         XCTAssertTrue(app.navigationBars["全記録のビュー"].waitForExistence(timeout: 15))

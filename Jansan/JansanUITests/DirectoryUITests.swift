@@ -17,6 +17,23 @@ final class DirectoryUITests: XCTestCase {
         return app
     }
 
+    /// 保存ボタンを押して、確認まで通す。
+    /// 押した瞬間に入ってしまうと間違いに気づけないので、確認を1枚挟んである
+    private func tapSave(_ app: XCUIApplication) {
+        let save = app.buttons["saveGame"]
+        XCTAssertTrue(save.waitForExistence(timeout: 10), "保存ボタンが無い")
+        save.tap()
+        // **アラートの中に限定する。** 単に label CONTAINS 'に残す' で探すと、
+        // ツールバーの保存ボタン自身（読み上げ名「この対局を記録に残す」）に当たって
+        // 保存されないまま通ってしまう
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 10), "保存の確認が出ない")
+        let confirm = alert.buttons.matching(NSPredicate(format: "label ENDSWITH 'に残す'")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "確認のボタンが無い")
+        confirm.tap()
+        XCTAssertFalse(alert.waitForExistence(timeout: 3), "確認が閉じていない")
+    }
+
     /// 前回のデータが残っていても衝突しないよう、毎回違う名前にする
     private func uniqueName(_ base: String) -> String {
         base + String(UUID().uuidString.prefix(4))
@@ -34,10 +51,17 @@ final class DirectoryUITests: XCTestCase {
         XCTAssertTrue(app.buttons["openSettings"].waitForExistence(timeout: 20), "入力画面が出ない")
         let tab = app.segmentedControls.firstMatch.buttons["記録"]
         XCTAssertTrue(tab.waitForExistence(timeout: 10), "「記録」の切り替えが無い")
-        // タブのタップは起動直後の処理に飲まれることがある。効かなければ1回だけ押し直す
+        // 切り替えのタップは起動直後の処理に飲まれることがある。効かなければ1回だけ押し直す
         for _ in 0..<2 {
             tab.tap()
             if app.navigationBars["記録"].waitForExistence(timeout: 8) { return }
+            // ディレクトリの中に入ったままだと、そこが出る。一覧まで戻る
+            for _ in 0..<3 {
+                let back = app.navigationBars.buttons.element(boundBy: 0)
+                guard back.exists, back.isHittable else { break }
+                back.tap()
+                if app.navigationBars["記録"].waitForExistence(timeout: 5) { return }
+            }
         }
         XCTFail("記録が開かない")
     }
@@ -116,14 +140,7 @@ final class DirectoryUITests: XCTestCase {
         app.buttons["cell-0-0"].tap()
         for key in ["3", "0"] { app.buttons[key].firstMatch.tap() }
         app.buttons["確定"].tap()
-        let save = app.buttons["saveGame"]
-        if !save.waitForExistence(timeout: 10) {
-            let d = XCTAttachment(string: app.debugDescription)
-            d.name = "NG-saveGameが無いときの要素"; d.lifetime = .keepAlways; add(d)
-            XCTFail("保存ボタンが無い")
-            return
-        }
-        save.tap()
+        tapSave(app)
 
         // そのディレクトリに1件入っている
         openRecordsTab(app)
@@ -230,7 +247,7 @@ extension DirectoryUITests {
         app.buttons["cell-0-0"].tap()
         for key in ["7", "7"] { app.buttons[key].firstMatch.tap() }
         app.buttons["確定"].tap()
-        app.buttons["saveGame"].tap()
+        tapSave(app)
 
         openRecordsTab(app)
         let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
@@ -253,5 +270,36 @@ extension DirectoryUITests {
 
         // 入力の表は触られていない
         XCTAssertEqual(app.buttons["cell-0-0"].value as? String, "77", "入力中の表が置き換わっている")
+    }
+}
+
+// MARK: - 保存の確認
+
+extension DirectoryUITests {
+
+    /// 保存は押した瞬間には入らず、どこへ入るかを見せてから確定すること。
+    /// 共有中なら、相手に届くことも伝える
+    func testSaveAsksBeforeStoring() {
+        let app = launchApp()
+        XCTAssertTrue(app.buttons["cell-0-0"].waitForExistence(timeout: 20))
+        app.buttons["cell-0-0"].tap()
+        for key in ["1", "2"] { app.buttons[key].firstMatch.tap() }
+        app.buttons["確定"].tap()
+
+        app.buttons["saveGame"].tap()
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 10), "確認が出ない")
+        XCTAssertTrue(alert.buttons.matching(NSPredicate(format: "label ENDSWITH 'に残す'")).firstMatch.exists,
+                      "どこへ残すのかがボタンに出ていない")
+        XCTAssertTrue(alert.staticTexts.containing(NSPredicate(format: "label CONTAINS '人打ち'"))
+                        .firstMatch.exists, "何を残すのかが書かれていない")
+        attach(app, "保存の確認")
+
+        // やめれば入らない
+        alert.buttons["やめる"].tap()
+        openRecordsTab(app)
+        let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
+        XCTAssertTrue(mine.waitForExistence(timeout: 10))
+        XCTAssertTrue(mine.label.contains("0 件"), "やめたのに保存されている: \(mine.label)")
     }
 }
