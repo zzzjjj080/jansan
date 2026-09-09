@@ -15,7 +15,7 @@ struct ContentView: View {
     @State private var sheet: SheetKind?
 
     private enum SheetKind: String, Identifiable {
-        case settings, stats, howTo, export
+        case settings, stats, howTo, export, pickDirectory
         var id: String { rawValue }
     }
 
@@ -59,6 +59,7 @@ struct ContentView: View {
             case .stats:    StatsView(board: board)
             case .howTo:    HowToView()
             case .export:   ExportView(board: board)
+            case .pickDirectory: DirectoryPickerView()
             }
         }
         .task {
@@ -71,22 +72,37 @@ struct ContentView: View {
     }
 
     private var appBar: some View {
-        HStack(spacing: 12) {
-            // アプリ名と局数は消した。毎回見ても得るものが無く、
-            // その分をボタンの大きさに回した方が効く（人数と保存先だけ残す）
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(spacing: 6) {
+            // 1段目は文字だけ。2段目をボタン専用にして、指の的を大きく取る
+            HStack(spacing: 6) {
                 Text("\(board.session.players.count)人打ち")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Palette.ink)
+                Text("・")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.line)
                 Text("保存先: \(currentDirectoryName)")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Palette.inkDim)
                     .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 4)
+            .padding(.horizontal, 4)
 
-            // テンキーを閉じてもマスをタップすれば開くので、開き直すボタンは置かない
-            HStack(spacing: 4) {
+            HStack(spacing: 0) {
+                // いちばん左が保存先の変更、その右が保存。よく使う2つを端に置く
+                barButton("folder.fill", id: "pickDirectory", label: "保存先を変える") {
+                    sheet = .pickDirectory
+                }
+                barButton(didSave ? "checkmark.circle.fill" : "arrow.up.folder.fill",
+                          id: "saveGame", label: "この対局を記録に残す") {
+                    saveConfirm = true
+                }
+                .sensoryFeedback(.success, trigger: didSave) { _, new in new }
+
+                Spacer(minLength: 0)
+
                 // 戻せるものが無いときは薄く出す。消すと他のボタンの位置がずれて押し間違えるため
                 barButton("arrow.uturn.backward", id: "undo", label: "取り消す") {
                     board.undoLastChange()
@@ -98,20 +114,13 @@ struct ContentView: View {
                     sheet = .stats
                 }
 
-                // 打ち終わったら押す。設定の奥にあったのを表のすぐ上に出した
-                barButton(didSave ? "checkmark.circle.fill" : "square.and.arrow.down",
-                          id: "saveGame", label: "この対局を記録に残す") {
-                    saveConfirm = true
-                }
-                .sensoryFeedback(.success, trigger: didSave) { _, new in new }
-
                 barButton("gearshape.fill", id: "openSettings", label: "設定") {
                     sheet = .settings
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.bottom, 10)
+        .padding(.horizontal, 8)
+        .padding(.bottom, 8)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Palette.line).frame(height: 0.5)
         }
@@ -123,9 +132,9 @@ struct ContentView: View {
                            action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: 26, weight: .semibold))
                 .foregroundStyle(Palette.accent)
-                .frame(width: 44, height: 44)
+                .frame(width: 54, height: 48)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

@@ -56,10 +56,11 @@ final class Directory {
     /// 自分で書き込めるか。購読したものは読むだけ
     var isEditable: Bool { !isSubscribed }
 
-    /// 一覧に添える1行
+    /// 一覧に添える1行。**パスワードも出す。**
+    /// 共有相手に伝えるとき、設定画面を開き直さずに読めるようにするため
     var subtitle: String {
-        if isSubscribed { return "共有されたもの・ID: \(shareID)" }
-        if isShared { return "共有中・ID: \(shareID)" }
+        if isSubscribed { return "ID: \(shareID) ・ パスワード: \(sharePassword)" }
+        if isShared { return "共有中 ・ ID: \(shareID) ・ パスワード: \(sharePassword)" }
         return "この端末とiCloud"
     }
 }
@@ -109,6 +110,12 @@ enum DirectoryStore {
             sortBy: [SortDescriptor(\.savedAt, order: .reverse)]
         ))) ?? []
         return all.filter { ($0.directoryId ?? Directory.defaultUID) == uid }
+    }
+
+    /// 件数つきの1行。一覧と保存先の選択で同じ文言を使う
+    @MainActor
+    static func subtitle(of directory: Directory, in context: ModelContext) -> String {
+        "\(gameCount(of: directory, in: context)) 件 ・ \(directory.subtitle)"
     }
 
     @MainActor

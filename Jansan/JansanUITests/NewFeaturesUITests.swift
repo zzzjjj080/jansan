@@ -28,6 +28,8 @@ final class NewFeaturesUITests: XCTestCase {
         let gear = app.buttons["openSettings"]
         XCTAssertTrue(gear.waitForExistence(timeout: 20), "設定ボタンが無い")
         gear.tap()
+        // 起動直後の1回目は飲まれることがある。効かなければ1回だけ押し直す
+        if !app.navigationBars["設定"].waitForExistence(timeout: 8) { gear.tap() }
         if !app.navigationBars["設定"].waitForExistence(timeout: 15) {
             attach(app, "NG-設定が開かない")
             let d = XCTAttachment(string: "hittable=\(gear.isHittable) frame=\(gear.frame)\n" + app.debugDescription)
@@ -53,6 +55,7 @@ final class NewFeaturesUITests: XCTestCase {
 
     /// デモデータを入れて記録として保存する。集計や検索の材料を作る
     private func makeRecords(_ app: XCUIApplication, count: Int = 2) {
+        useDefaultDirectory(app)
         for _ in 0..<count {
             openSettings(app)
             let seed = app.buttons["デモデータを3局入れる"]
@@ -62,6 +65,21 @@ final class NewFeaturesUITests: XCTestCase {
             // 保存は入力画面の右上。押すと確認が1枚挟まる
             tapSave(app)
         }
+    }
+
+    /// 保存先を「マイ記録」に戻す。
+    /// **@AppStorage は起動をまたいで残る。** 前のテストが保存先を変えたままだと、
+    /// 次のテストが別のディレクトリへ保存して「記録が無い」と誤検知する
+    private func useDefaultDirectory(_ app: XCUIApplication) {
+        let picker = app.buttons["pickDirectory"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 20), "保存先のボタンが無い")
+        picker.tap()
+        XCTAssertTrue(app.navigationBars["保存先"].waitForExistence(timeout: 10), "保存先の選択が開かない")
+        let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
+        XCTAssertTrue(mine.waitForExistence(timeout: 10), "「マイ記録」が選べない")
+        mine.tap()
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '保存先: マイ記録'"))
+                        .firstMatch.waitForExistence(timeout: 10), "保存先がマイ記録にならない")
     }
 
     /// 保存ボタンを押して、確認まで通す
@@ -82,6 +100,7 @@ final class NewFeaturesUITests: XCTestCase {
 
     /// 記録タブを開いて「マイ記録」に入る
     private func openMyRecords(_ app: XCUIApplication) {
+        XCTAssertTrue(app.buttons["openSettings"].waitForExistence(timeout: 20), "入力画面が出ない")
         app.segmentedControls.firstMatch.buttons["記録"].tap()
         let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
         XCTAssertTrue(mine.waitForExistence(timeout: 10), "「マイ記録」が無い")

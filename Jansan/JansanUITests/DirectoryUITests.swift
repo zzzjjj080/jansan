@@ -34,6 +34,21 @@ final class DirectoryUITests: XCTestCase {
         XCTAssertFalse(alert.waitForExistence(timeout: 3), "確認が閉じていない")
     }
 
+    /// 保存先を「マイ記録」に戻す。
+    /// **@AppStorage は起動をまたいで残る。** 前のテストが保存先を変えたままだと、
+    /// 次のテストが別のディレクトリへ保存して「記録が無い」と誤検知する
+    private func useDefaultDirectory(_ app: XCUIApplication) {
+        let picker = app.buttons["pickDirectory"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 20), "保存先のボタンが無い")
+        picker.tap()
+        XCTAssertTrue(app.navigationBars["保存先"].waitForExistence(timeout: 10), "保存先の選択が開かない")
+        let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
+        XCTAssertTrue(mine.waitForExistence(timeout: 10), "「マイ記録」が選べない")
+        mine.tap()
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '保存先: マイ記録'"))
+                        .firstMatch.waitForExistence(timeout: 10), "保存先がマイ記録にならない")
+    }
+
     /// 前回のデータが残っていても衝突しないよう、毎回違う名前にする
     private func uniqueName(_ base: String) -> String {
         base + String(UUID().uuidString.prefix(4))
@@ -46,6 +61,11 @@ final class DirectoryUITests: XCTestCase {
         add(shot)
     }
 
+    /// 一覧に着いたかどうか。見出しは消したので、＋ の有無で判断する
+    private func atDirectoryList(_ app: XCUIApplication, timeout: TimeInterval = 8) -> Bool {
+        app.buttons["addDirectory"].waitForExistence(timeout: timeout)
+    }
+
     private func openRecordsTab(_ app: XCUIApplication) {
         // 起動直後は「マイ記録」の用意や復元が走っている。入力画面が出そろうまで待ってから押す
         XCTAssertTrue(app.buttons["openSettings"].waitForExistence(timeout: 20), "入力画面が出ない")
@@ -54,13 +74,13 @@ final class DirectoryUITests: XCTestCase {
         // 切り替えのタップは起動直後の処理に飲まれることがある。効かなければ1回だけ押し直す
         for _ in 0..<2 {
             tab.tap()
-            if app.navigationBars["記録"].waitForExistence(timeout: 8) { return }
+            if atDirectoryList(app) { return }
             // ディレクトリの中に入ったままだと、そこが出る。一覧まで戻る
             for _ in 0..<3 {
                 let back = app.navigationBars.buttons.element(boundBy: 0)
                 guard back.exists, back.isHittable else { break }
                 back.tap()
-                if app.navigationBars["記録"].waitForExistence(timeout: 5) { return }
+                if atDirectoryList(app, timeout: 5) { return }
             }
         }
         XCTFail("記録が開かない")
@@ -224,7 +244,7 @@ final class DirectoryUITests: XCTestCase {
         XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: 10))
         app.alerts.buttons["削除する"].tap()
 
-        XCTAssertTrue(app.navigationBars["記録"].waitForExistence(timeout: 10), "一覧に戻らない")
+        XCTAssertTrue(atDirectoryList(app, timeout: 10), "一覧に戻らない")
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch.exists, "消えていない")
 
         app.segmentedControls.firstMatch.buttons["入力"].tap()
@@ -242,6 +262,8 @@ extension DirectoryUITests {
     func testTappingRecordOpensReadOnlyView() {
         let app = launchApp()
 
+        useDefaultDirectory(app)
+
         // 入力に目印を1つ入れておく。これが残っていれば置き換わっていない
         XCTAssertTrue(app.buttons["cell-0-0"].waitForExistence(timeout: 20))
         app.buttons["cell-0-0"].tap()
@@ -255,7 +277,13 @@ extension DirectoryUITests {
         mine.tap()
 
         let row = app.buttons.matching(NSPredicate(format: "label CONTAINS '人打ち'")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 10), "記録の行が無い")
+        if !row.waitForExistence(timeout: 10) {
+            attach(app, "NG-記録の行が無い")
+            let d = XCTAttachment(string: app.debugDescription)
+            d.name = "NG-記録の行が無いときの要素"; d.lifetime = .keepAlways; add(d)
+            XCTFail("記録の行が無い")
+            return
+        }
         row.tap()
 
         // 見るだけの帯が出て、入力用のマスは出ていない
@@ -301,5 +329,57 @@ extension DirectoryUITests {
         let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
         XCTAssertTrue(mine.waitForExistence(timeout: 10))
         XCTAssertTrue(mine.label.contains("0 件"), "やめたのに保存されている: \(mine.label)")
+    }
+}
+
+// MARK: - 保存先の切り替えと削除
+
+extension DirectoryUITests {
+
+    /// 入力画面のいちばん左のボタンから保存先を変えられること
+    func testPickDirectoryFromInput() {
+        let app = launchApp()
+        let name = uniqueName("先")
+        openRecordsTab(app)
+        createDirectory(app, named: name)
+        app.segmentedControls.firstMatch.buttons["入力"].tap()
+
+        let picker = app.buttons["pickDirectory"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 10), "保存先のボタンが無い")
+        picker.tap()
+        XCTAssertTrue(app.navigationBars["保存先"].waitForExistence(timeout: 10), "保存先の選択が開かない")
+        attach(app, "保存先を選ぶ")
+
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'pick-'"))
+            .element(boundBy: 1).tap()
+
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '保存先: '"))
+                        .firstMatch.waitForExistence(timeout: 10), "見出しに保存先が出ない")
+    }
+
+    /// 一覧からスワイプで消せること。確認を挟むこと
+    func testSwipeDeleteAsksFirst() {
+        let app = launchApp()
+        let name = uniqueName("削")
+        openRecordsTab(app)
+        createDirectory(app, named: name)
+
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "作った行が無い")
+        row.swipeLeft()
+
+        let delete = app.buttons["Delete"].exists ? app.buttons["Delete"] : app.buttons["削除"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 5), "スワイプで削除が出ない")
+        delete.tap()
+
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 10), "確認せずに消そうとしている")
+        alert.buttons["やめる"].tap()
+        XCTAssertTrue(row.exists, "やめたのに消えている")
+
+        row.swipeLeft()
+        (app.buttons["Delete"].exists ? app.buttons["Delete"] : app.buttons["削除"]).tap()
+        app.alerts.firstMatch.buttons["削除する"].tap()
+        XCTAssertFalse(row.waitForExistence(timeout: 5), "消えていない")
     }
 }
