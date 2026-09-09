@@ -23,6 +23,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                undoSection
                 newSessionSection
                 membersSection
                 inputSection
@@ -259,6 +260,25 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("showHowTo")
+        }
+    }
+
+    /// 上のボタンからは外したが、機能は残す。
+    /// 「新規セッション」や「記録の読み込み」を押し間違えたときの戻り道が無くなるため
+    private var undoSection: some View {
+        Section {
+            Button {
+                board.undoLastChange()
+                dismiss()
+            } label: {
+                Label("直前の操作を取り消す", systemImage: "arrow.uturn.backward")
+            }
+            .disabled(!board.canUndo)
+            .accessibilityIdentifier("undo")
+        } footer: {
+            Text(board.canUndo
+                 ? "点数の確定・お休み・マスの消去・局の削除・メンバーの増減・記録の読み込み・新規セッションを、1つずつ戻せます。"
+                 : "いまは戻せる操作がありません。")
         }
     }
 

@@ -15,6 +15,13 @@ final class Directory {
     static let defaultUID = UUID(uuidString: "00000000-0000-0000-0000-00000000A001")!
     static let defaultName = "マイ記録"
 
+    /// 「新しい対局を始める」で消える前の表を、黙って控えておく場所。
+    /// 押し間違えても戻せるようにするためのもので、保存先には選べない
+    static let autoBackupUID = UUID(uuidString: "00000000-0000-0000-0000-00000000A002")!
+    static let autoBackupName = "自動バックアップ"
+    /// 控えは溜め続けない。古いものから捨てる
+    static let autoBackupLimit = 30
+
     var uid: UUID = UUID()
     var name: String = ""
     var createdAt: Date = Date.distantPast
@@ -52,13 +59,19 @@ final class Directory {
     }
 
     var isDefault: Bool { uid == Self.defaultUID }
+    var isAutoBackup: Bool { uid == Self.autoBackupUID }
 
     /// 自分で書き込めるか。購読したものは読むだけ
     var isEditable: Bool { !isSubscribed }
 
+    /// 保存先として選べるか。自動バックアップは仕組みが入れる場所なので選ばせない
+    var isSelectableDestination: Bool { isEditable && !isAutoBackup }
+
     /// 一覧に添える1行。**パスワードも出す。**
+    /// （自動バックアップだけは別の説明にする）
     /// 共有相手に伝えるとき、設定画面を開き直さずに読めるようにするため
     var subtitle: String {
+        if isAutoBackup { return "新しい対局を始める前の控え" }
         if isSubscribed { return "ID: \(shareID) ・ パスワード: \(sharePassword)" }
         if isShared { return "共有中 ・ ID: \(shareID) ・ パスワード: \(sharePassword)" }
         return "この端末とiCloud"
@@ -81,7 +94,7 @@ enum DirectoryStore {
         if found.isEmpty {
             context.insert(Directory(uid: target, name: Directory.defaultName, sortOrder: -1))
             try? context.save()
-        } else if found.count > 1 {
+        } else if found.count > 1 {  // CloudKit で2台が同時に作ると重複しうる
             for extra in found.sorted(by: { $0.createdAt < $1.createdAt }).dropFirst() {
                 context.delete(extra)
             }
@@ -136,6 +149,42 @@ enum DirectoryStore {
             context.insert(record)
         }
         try? context.save()
+    }
+
+    /// 「新しい対局を始める」の前に、いまの表を黙って控える。
+    ///
+    /// **利用者は普通に保存してから始めるが、押し間違えることがある。**
+    /// そのときに戻せる場所を1つ持たせておく。控えは古いものから捨てて溜めすぎない。
+    @MainActor
+    static func autoBackup(_ snapshot: GameSnapshot, in context: ModelContext) {
+        // 何も打っていない表を控えても意味がない
+        guard snapshot.session.playedRoundCount > 0 else { return }
+
+        let directory = ensure(uid: Directory.autoBackupUID,
+                               name: Directory.autoBackupName,
+                               sortOrder: 1000, in: context)
+        guard let record = try? SavedGame(snapshot: snapshot, isDraft: false) else { return }
+        record.directoryId = directory.uid
+        record.note = "自動保存"
+        context.insert(record)
+
+        // 古いものから捨てる。games(of:) は保存日時の新しい順
+        let kept = games(of: directory, in: context)
+        if kept.count > Directory.autoBackupLimit {
+            for old in kept.dropFirst(Directory.autoBackupLimit) { context.delete(old) }
+        }
+        try? context.save()
+    }
+
+    /// 決まったUIDのディレクトリを用意する。無ければ作る
+    @MainActor
+    @discardableResult
+    static func ensure(uid: UUID, name: String, sortOrder: Int, in context: ModelContext) -> Directory {
+        if let found = directory(uid: uid, in: context) { return found }
+        let directory = Directory(uid: uid, name: name, sortOrder: sortOrder)
+        context.insert(directory)
+        try? context.save()
+        return directory
     }
 
     /// 送るための塊を作る

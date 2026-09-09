@@ -43,6 +43,9 @@ final class ScoreBoard {
         restoreDraft()
     }
 
+    /// いまの表の写し。新規セッションの前に控えるのに使う
+    var currentSnapshot: GameSnapshot { snapshot }
+
     private var snapshot: GameSnapshot {
         GameSnapshot(roster: roster, session: session, autoConfirm: autoConfirm)
     }

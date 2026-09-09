@@ -45,7 +45,7 @@ final class DirectoryUITests: XCTestCase {
         let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
         XCTAssertTrue(mine.waitForExistence(timeout: 10), "「マイ記録」が選べない")
         mine.tap()
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '保存先: マイ記録'"))
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS '保存先: マイ記録'"))
                         .firstMatch.waitForExistence(timeout: 10), "保存先がマイ記録にならない")
     }
 
@@ -148,7 +148,7 @@ final class DirectoryUITests: XCTestCase {
 
         // 入力へ戻って、見出しに保存先が出ていること
         app.segmentedControls.firstMatch.buttons["入力"].tap()
-        let caption = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "保存先: " + name)).firstMatch
+        let caption = app.buttons.containing(NSPredicate(format: "label CONTAINS %@", "保存先: " + name)).firstMatch
         if !caption.waitForExistence(timeout: 10) {
             let d = XCTAttachment(string: app.debugDescription)
             d.name = "NG-保存先が出ないときの要素"; d.lifetime = .keepAlways; add(d)
@@ -248,7 +248,7 @@ final class DirectoryUITests: XCTestCase {
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch.exists, "消えていない")
 
         app.segmentedControls.firstMatch.buttons["入力"].tap()
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '保存先: マイ記録'"))
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS '保存先: マイ記録'"))
                         .firstMatch.waitForExistence(timeout: 10), "保存先がマイ記録に戻っていない")
     }
 }
@@ -353,7 +353,7 @@ extension DirectoryUITests {
         app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'pick-'"))
             .element(boundBy: 1).tap()
 
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '保存先: '"))
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS '保存先: '"))
                         .firstMatch.waitForExistence(timeout: 10), "見出しに保存先が出ない")
     }
 
@@ -381,5 +381,61 @@ extension DirectoryUITests {
         (app.buttons["Delete"].exists ? app.buttons["Delete"] : app.buttons["削除"]).tap()
         app.alerts.firstMatch.buttons["削除する"].tap()
         XCTAssertFalse(row.waitForExistence(timeout: 5), "消えていない")
+    }
+}
+
+// MARK: - 新しい対局を始める
+
+extension DirectoryUITests {
+
+    /// 新規セッションは確認を挟み、消える前に控えを取ること。
+    /// **押し間違えても記録から戻せる**のが要点
+    func testNewSessionBacksUpBeforeClearing() {
+        let app = launchApp()
+        useDefaultDirectory(app)
+
+        // 1局入れる
+        XCTAssertTrue(app.buttons["cell-0-0"].waitForExistence(timeout: 20))
+        app.buttons["cell-0-0"].tap()
+        for key in ["5", "5"] { app.buttons[key].firstMatch.tap() }
+        app.buttons["確定"].tap()
+        XCTAssertEqual(app.buttons["cell-0-0"].value as? String, "55")
+
+        // やめれば消えない
+        app.buttons["newSession"].tap()
+        var alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 10), "確認が出ない")
+        XCTAssertTrue(alert.staticTexts.containing(
+            NSPredicate(format: "label CONTAINS '自動バックアップ'")).firstMatch.exists,
+            "控えを取ることが伝わっていない")
+        attach(app, "新規セッションの確認")
+        alert.buttons["やめる"].tap()
+        XCTAssertEqual(app.buttons["cell-0-0"].value as? String, "55", "やめたのに消えている")
+
+        // 始めると表は空になる
+        app.buttons["newSession"].tap()
+        alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 10))
+        alert.buttons["始める"].tap()
+        XCTAssertEqual(app.buttons["cell-0-0"].value as? String, "未入力", "表が消えていない")
+
+        // 控えが「自動バックアップ」に入っている
+        openRecordsTab(app)
+        let backup = app.buttons.matching(
+            NSPredicate(format: "label BEGINSWITH '自動バックアップ'")).firstMatch
+        XCTAssertTrue(backup.waitForExistence(timeout: 10), "自動バックアップが作られていない")
+        XCTAssertFalse(backup.label.contains("0 件"), "控えが入っていない: \(backup.label)")
+        attach(app, "自動バックアップ")
+    }
+
+    /// 自動バックアップは保存先には選べないこと。仕組みが入れる場所なので
+    func testAutoBackupIsNotSelectableAsDestination() {
+        let app = launchApp()
+        XCTAssertTrue(app.buttons["pickDirectory"].waitForExistence(timeout: 20))
+        app.buttons["pickDirectory"].tap()
+        XCTAssertTrue(app.navigationBars["保存先"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons.matching(
+            NSPredicate(format: "label BEGINSWITH '自動バックアップ'")).firstMatch.exists,
+            "自動バックアップが保存先に出ている")
     }
 }

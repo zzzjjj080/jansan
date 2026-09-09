@@ -78,7 +78,7 @@ final class NewFeaturesUITests: XCTestCase {
         let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
         XCTAssertTrue(mine.waitForExistence(timeout: 10), "「マイ記録」が選べない")
         mine.tap()
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS '保存先: マイ記録'"))
+        XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS '保存先: マイ記録'"))
                         .firstMatch.waitForExistence(timeout: 10), "保存先がマイ記録にならない")
     }
 
@@ -113,21 +113,33 @@ final class NewFeaturesUITests: XCTestCase {
     func testUndoRestoresClearedCell() {
         let app = launchApp()
 
-        let undo = app.buttons["undo"]
-        XCTAssertTrue(undo.waitForExistence(timeout: 20), "取り消しボタンが無い")
-        // 何もしていないうちは押せない
-        XCTAssertFalse(undo.isEnabled, "起動直後に取り消しが有効になっている")
+        // 取り消しは上のボタンから外し、設定のいちばん上へ移した。
+        // 上は保存先・保存・ビュー・設定の4つだけにしたい、という判断
+        XCTAssertTrue(app.buttons["cell-0-0"].waitForExistence(timeout: 20))
+        XCTAssertFalse(app.buttons["undo"].exists, "取り消しが上に残っている")
 
-        // 1マス入れる
-        app.staticTexts["·"].firstMatch.tap()
+        openSettings(app)
+        let undoInSettings = app.buttons["undo"]
+        XCTAssertTrue(scrollTo(app, undoInSettings), "設定に取り消しが無い")
+        XCTAssertFalse(undoInSettings.isEnabled, "何もしていないのに取り消せることになっている")
+        app.navigationBars["設定"].buttons["完了"].tap()
+
+        // 1マス入れる。**前のテストが残した値があるので、入れる前の値を控えておく。**
+        // 「取り消したら未入力に戻る」と決め打ちすると、空でない状態で落ちる
+        let before = app.buttons["cell-0-0"].value as? String ?? ""
+        app.buttons["cell-0-0"].tap()
         for key in ["3", "0"] { app.buttons[key].firstMatch.tap() }
         app.buttons["確定"].tap()
+        XCTAssertEqual(app.buttons["cell-0-0"].value as? String, "30")
 
-        XCTAssertTrue(undo.isEnabled, "入力しても取り消しが有効にならない")
-        attach(app, "取り消し-入力後")
+        // 設定から取り消すと、入力が戻る
+        openSettings(app)
+        XCTAssertTrue(scrollTo(app, app.buttons["undo"]), "設定に取り消しが無い")
+        XCTAssertTrue(app.buttons["undo"].isEnabled, "入力したのに取り消せない")
+        app.buttons["undo"].tap()
 
-        undo.tap()
-        XCTAssertFalse(undo.isEnabled, "1回しか操作していないのに、まだ戻せることになっている")
+        XCTAssertTrue(app.buttons["cell-0-0"].waitForExistence(timeout: 10), "入力画面に戻らない")
+        XCTAssertEqual(app.buttons["cell-0-0"].value as? String, before, "取り消しても元の値に戻っていない")
         attach(app, "取り消し-戻した後")
     }
 

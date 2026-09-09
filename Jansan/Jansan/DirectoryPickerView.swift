@@ -14,7 +14,7 @@ struct DirectoryPickerView: View {
     @State private var showNew = false
     @State private var newName = ""
 
-    private var choices: [Directory] { directories.filter(\.isEditable) }
+    private var choices: [Directory] { directories.filter(\.isSelectableDestination) }
 
     var body: some View {
         NavigationStack {

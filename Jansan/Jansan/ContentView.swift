@@ -21,6 +21,7 @@ struct ContentView: View {
 
     @State private var didSave = false
     @State private var saveConfirm = false
+    @State private var newSessionConfirm = false
     @AppStorage("currentDirectory") private var currentDirectoryID = Directory.defaultUID.uuidString
     @Query private var directories: [Directory]
     /// 初回だけ自動で出す。以後は設定の「使い方」から
@@ -41,6 +42,13 @@ struct ContentView: View {
                     Button("「\(currentDirectoryName)」に残す") { save() }
                 } message: {
                     Text(saveMessage)
+                }
+                .alert("新しい対局を始めますか", isPresented: $newSessionConfirm) {
+                    Button("やめる", role: .cancel) {}
+                    Button("記録に残して始める") { startNewSession(archive: true) }
+                    Button("始める", role: .destructive) { startNewSession(archive: false) }
+                } message: {
+                    Text(newSessionMessage)
                 }
             ScoreTableView(board: board)
                 .padding(.horizontal, 10)
@@ -71,56 +79,78 @@ struct ContentView: View {
         }
     }
 
+    /// 上の帯の高さ。**5つとも同じ高さに揃える。**
+    /// 指の的としてはこれが下限（Apple の目安が44pt）。ここは削らず、
+    /// 代わりに余白と記号の大きさを詰める
+    private let barHeight: CGFloat = 44
+
     private var appBar: some View {
-        VStack(spacing: 6) {
-            // 1段目は文字だけ。2段目をボタン専用にして、指の的を大きく取る
-            HStack(spacing: 6) {
-                Text("\(board.session.players.count)人打ち")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Palette.ink)
-                Text("・")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Palette.line)
-                Text("保存先: \(currentDirectoryName)")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Palette.inkDim)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Spacer(minLength: 0)
+        HStack(spacing: 4) {
+            // 保存先は「表示」と「変更ボタン」を1つにする。
+            // 別々にすると、そこで変えられることに気づかない
+            Button {
+                sheet = .pickDirectory
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text(currentDirectoryName)
+                        .font(.system(size: 15, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
+                }
+                .foregroundStyle(Palette.accent)
+                .padding(.horizontal, 9)
+                .frame(height: barHeight)
+                .background(Palette.accent.opacity(0.12), in: Capsule())
+                .contentShape(Capsule())
             }
-            .padding(.horizontal, 4)
+            .buttonStyle(.plain)
+            // ボタンが増えて幅が足りなくなると、まず保存先の名前が潰れる。
+            // 名前が読めないと何に入るのか分からないので、ここを最優先で残す
+            .layoutPriority(2)
+            .accessibilityIdentifier("pickDirectory")
+            .accessibilityLabel("保存先: \(currentDirectoryName)")
+            .accessibilityHint("タップすると保存先を変えられます")
 
-            HStack(spacing: 0) {
-                // いちばん左が保存先の変更、その右が保存。よく使う2つを端に置く
-                barButton("folder.fill", id: "pickDirectory", label: "保存先を変える") {
-                    sheet = .pickDirectory
-                }
-                barButton(didSave ? "checkmark.circle.fill" : "arrow.up.folder.fill",
-                          id: "saveGame", label: "この対局を記録に残す") {
-                    saveConfirm = true
-                }
-                .sensoryFeedback(.success, trigger: didSave) { _, new in new }
+            Text("\(board.session.players.count)人打ち")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(Palette.accent)
+                .lineLimit(1)
+                .padding(.leading, 2)
+                .frame(height: barHeight)
+                .layoutPriority(1)
 
-                Spacer(minLength: 0)
+            Spacer(minLength: 0)
 
-                // 戻せるものが無いときは薄く出す。消すと他のボタンの位置がずれて押し間違えるため
-                barButton("arrow.uturn.backward", id: "undo", label: "取り消す") {
-                    board.undoLastChange()
-                }
-                .disabled(!board.canUndo)
-                .opacity(board.canUndo ? 1 : 0.3)
+            // 並びは「見る → 残す → 次へ → 設定」。
+            // **保存と新規セッションを隣に置く。**終局後はこの順に押すので、
+            // 読む順と操作の順が一致する。記号の形も folder / 時計回りで大きく違うため取り違えにくい。
+            // 破壊的な新規セッションを端に置かないのは、端は無意識に触りやすいため
+            barButton("chart.line.uptrend.xyaxis", id: "openStats", label: "ビュー") {
+                sheet = .stats
+            }
 
-                barButton("chart.line.uptrend.xyaxis", id: "openStats", label: "ビュー") {
-                    sheet = .stats
-                }
+            // 記録に残す。**矢印は左から右へ。**
+            // 上から入る形にしたら縦長になり、帯の高さを押し上げていた
+            barButton("arrow.forward.folder.fill", id: "saveGame",
+                      label: "この対局を記録に残す", filled: didSave) {
+                saveConfirm = true
+            }
+            .sensoryFeedback(.success, trigger: didSave) { _, new in new }
 
-                barButton("gearshape.fill", id: "openSettings", label: "設定") {
-                    sheet = .settings
-                }
+            barButton("arrow.clockwise", id: "newSession", label: "新しい対局を始める") {
+                newSessionConfirm = true
+            }
+
+            barButton("gearshape.fill", id: "openSettings", label: "設定") {
+                sheet = .settings
             }
         }
         .padding(.horizontal, 8)
-        .padding(.bottom, 8)
+        .padding(.bottom, 4)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Palette.line).frame(height: 0.5)
         }
@@ -129,17 +159,33 @@ struct ContentView: View {
     /// 上のボタン。**指で押す的を44pt角にする。**
     /// 以前は17ptの記号そのものが的で、狙って外すことがあった
     private func barButton(_ symbol: String, id: String, label: String,
+                           filled: Bool = false,
                            action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 26, weight: .semibold))
+            Image(systemName: filled ? "checkmark.circle.fill" : symbol)
+                .font(.system(size: 21, weight: .semibold))
                 .foregroundStyle(Palette.accent)
-                .frame(width: 54, height: 48)
+                .frame(width: 44, height: barHeight)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(id)
         .accessibilityLabel(label)
+    }
+
+    private var newSessionMessage: String {
+        let rounds = board.session.playedRoundCount
+        guard rounds > 0 else { return "いまの表はまだ空です。そのまま新しい対局を始められます。" }
+        return "いまの表（\(board.session.players.count)人打ち・\(rounds)局）は消えます。"
+            + "念のため「\(Directory.autoBackupName)」に控えを取るので、押し間違えても記録から戻せます。"
+    }
+
+    /// 新しい対局を始める。**消える前に必ず控えを取る。**
+    /// 普通は保存してから始めるが、押し間違えたときの戻り道が要る
+    private func startNewSession(archive: Bool) {
+        DirectoryStore.autoBackup(board.currentSnapshot, in: context)
+        if archive { save() }
+        board.resetSession()
     }
 
     /// 保存先が共有中なら、相手に届くことまで書く。
