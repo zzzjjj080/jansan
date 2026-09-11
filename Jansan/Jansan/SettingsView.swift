@@ -23,7 +23,8 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 membersSection
-                inputSection
+                scoreFormatSection
+                autoAdvanceSection
                 appearanceSection
                 recordSection
                 backupSection
@@ -155,20 +156,40 @@ struct SettingsView: View {
 
     // MARK: - 入力
 
-    private var inputSection: some View {
+    /// 点数の書き方。**トグルではなくピッカーにする。**
+    /// 「小数点モード」では何が小数になるのか分からないが、
+    /// 選択肢に例を入れれば、選ぶときにそのまま答えが見える
+    private var scoreFormatSection: some View {
         Section {
-            Toggle("小数点モード", isOn: Binding(
+            Picker("点数の書き方", selection: Binding(
                 get: { board.decimalMode },
                 set: { board.decimalMode = $0 }
-            ))
-            Toggle("自動確定モード", isOn: Binding(
+            )) {
+                Text("整数 (32)").tag(false)
+                Text("小数 (32.3)").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("scoreFormat")
+        } footer: {
+            Text("打つ数字は同じです。小数を選ぶと、末尾の1桁を小数として表示します。")
+        }
+    }
+
+    /// 自動で次のマスへ進むか。
+    /// 「自動確定」は内部の言葉で、利用者の関心は指を止めずに進めるかどうか
+    private var autoAdvanceSection: some View {
+        Section {
+            Toggle("打ったら自動で次へ", isOn: Binding(
                 get: { board.autoConfirm },
                 set: { board.autoConfirm = $0 }
             ))
-        } header: {
-            Text("入力設定")
+            .accessibilityIdentifier("autoAdvance")
         } footer: {
-            Text("小数点モードは末尾1桁を小数として扱います（323 と打つと 32.3）。自動確定をOFFにすると、桁数によらず「確定」を押すまで待ちます。")
+            Text("""
+                ・2桁打つと確定し、次のマスへ進みます
+                ・3桁打ちたいときは、続けて打てば入ります
+                ・OFFにすると、桁数によらず「確定」を押すまで待ちます
+                """)
         }
     }
 
