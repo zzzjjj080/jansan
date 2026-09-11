@@ -22,8 +22,6 @@ struct ContentView: View {
     @State private var didSave = false
     @State private var saveConfirm = false
     @State private var newSessionConfirm = false
-    /// 人数を減らすと点数が消える人がいるとき、その人数を控えて確認を出す
-    @State private var pendingActiveCount: Int?
     @AppStorage("currentDirectory") private var currentDirectoryID = Directory.defaultUID.uuidString
     @Query private var directories: [Directory]
     /// 初回だけ自動で出す。以後は設定の「使い方」から
@@ -44,17 +42,6 @@ struct ContentView: View {
                     Button("「\(currentDirectoryName)」に残す") { save() }
                 } message: {
                     Text(saveMessage)
-                }
-                .alert("人数を変えますか", isPresented: Binding(
-                    get: { pendingActiveCount != nil },
-                    set: { if !$0 { pendingActiveCount = nil } })) {
-                    Button("やめる", role: .cancel) { pendingActiveCount = nil }
-                    Button("変える", role: .destructive) {
-                        if let count = pendingActiveCount { board.setActiveCount(count) }
-                        pendingActiveCount = nil
-                    }
-                } message: {
-                    Text(activeCountMessage)
                 }
                 .alert("新しい対局を始めますか", isPresented: $newSessionConfirm) {
                     Button("やめる", role: .cancel) {}
@@ -148,29 +135,18 @@ struct ContentView: View {
             // 名前が読めないと何に入るのか分からないので、ここを最優先で残す
             .layoutPriority(2)
 
-            // 打ち方と参加人数は別物。**1つのボタンにまとめて、中で2段に分ける。**
-            // 5人集まって四麻を回すことも、4人で三麻を回す（毎局ひとり抜ける）こともある
+            // 打ち方（三麻／四麻）だけをここで切り替える。
+            // 参加人数は毎回変えるものではないので、設定の「メンバー登録」に置く
             Menu {
-                Section("打ち方") {
-                    ForEach(Session.playersPerRoundChoices, id: \.self) { count in
-                        Button {
-                            board.setPlayersPerRound(count)
-                        } label: {
-                            Label(Self.styleName(count),
-                                  systemImage: board.playersPerRound == count ? "checkmark" : "")
-                        }
-                        .disabled(count > board.session.players.count)
+                // 打ち方だけ。参加人数は設定の「メンバー登録」で決める
+                ForEach(Session.playersPerRoundChoices, id: \.self) { count in
+                    Button {
+                        board.setPlayersPerRound(count)
+                    } label: {
+                        Label(Self.styleName(count),
+                              systemImage: board.playersPerRound == count ? "checkmark" : "")
                     }
-                }
-                Section("参加人数") {
-                    ForEach(Array(2...Roster.maxActive), id: \.self) { count in
-                        Button {
-                            requestActiveCount(count)
-                        } label: {
-                            Label("\(count)人",
-                                  systemImage: board.session.players.count == count ? "checkmark" : "")
-                        }
-                    }
+                    .disabled(count > board.session.players.count)
                 }
             } label: {
                 HStack(spacing: 4) {
@@ -187,7 +163,7 @@ struct ContentView: View {
                 .contentShape(Capsule())
             }
             .accessibilityIdentifier("playStyle")
-            .accessibilityLabel("\(playStyleCaption)。タップで打ち方と参加人数を変えられます")
+            .accessibilityLabel("\(playStyleCaption)。タップで三麻と四麻を切り替えられます")
             .layoutPriority(1)
 
             Spacer(minLength: 0)
@@ -243,23 +219,6 @@ struct ContentView: View {
         let style = Self.styleName(board.playersPerRound)
         let participants = board.session.players.count
         return participants == board.playersPerRound ? style : "\(style)・\(participants)人"
-    }
-
-    /// 人数を変える。点数が消える人がいるときだけ断りを入れる
-    private func requestActiveCount(_ count: Int) {
-        guard count != board.session.players.count else { return }
-        if board.membersLosingEntries(forActiveCount: count).isEmpty {
-            board.setActiveCount(count)
-        } else {
-            pendingActiveCount = count
-        }
-    }
-
-    private var activeCountMessage: String {
-        guard let count = pendingActiveCount else { return "" }
-        let names = board.membersLosingEntries(forActiveCount: count).map(\.name).joined(separator: "・")
-        return "参加\(count)人にすると「\(names)」が表から外れ、"
-            + "入力済みの点数も一緒に消えます。取り消しから戻せます。"
     }
 
     private var newSessionMessage: String {

@@ -510,7 +510,6 @@ extension DirectoryUITests {
 
         style.tap()
         XCTAssertTrue(app.buttons["三麻"].waitForExistence(timeout: 10), "打ち方の選択肢が無い")
-        XCTAssertTrue(app.buttons["4人"].exists, "参加人数の選択肢が無い")
         attach(app, "打ち方と参加人数")
         app.buttons["三麻"].tap()
 
@@ -542,27 +541,4 @@ extension DirectoryUITests {
                         .firstMatch.waitForExistence(timeout: 10), "四麻に戻らない")
     }
 
-    /// 点数が入っている人が外れるときは、消えることを伝えてから変える
-    func testPlayStyleWarnsBeforeLosingScores() {
-        let app = launchApp()
-        XCTAssertTrue(app.buttons["cell-0-3"].waitForExistence(timeout: 20), "4列目が無い")
-
-        // 4人目に点数を入れる
-        app.buttons["cell-0-3"].tap()
-        for key in ["4", "0"] { app.buttons[key].firstMatch.tap() }
-        app.buttons["確定"].tap()
-
-        app.buttons["playStyle"].tap()
-        app.buttons["3人"].tap()
-
-        let alert = app.alerts.firstMatch
-        XCTAssertTrue(alert.waitForExistence(timeout: 10), "断りが出ない")
-        XCTAssertTrue(alert.staticTexts.containing(
-            NSPredicate(format: "label CONTAINS '消えます'")).firstMatch.exists,
-            "何が起きるか書かれていない")
-        attach(app, "人数変更の確認")
-
-        alert.buttons["やめる"].tap()
-        XCTAssertTrue(app.buttons["cell-0-3"].exists, "やめたのに列が消えている")
-    }
 }

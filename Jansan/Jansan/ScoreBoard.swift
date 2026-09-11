@@ -336,15 +336,6 @@ final class ScoreBoard {
         return changed
     }
 
-    /// 参加人数をまとめて変える。三麻⇄四麻の切り替え。
-    /// 列が減ると、外れた人の点数は表から消える（名簿には残る）
-    func setActiveCount(_ count: Int) {
-        markUndoPoint()
-        roster.setActiveCount(count)
-        syncPlayers()
-        haptics.confirm()
-    }
-
     /// 打ち方（三麻／四麻）を変える。参加人数とは別物
     func setPlayersPerRound(_ count: Int) {
         markUndoPoint()
@@ -355,11 +346,6 @@ final class ScoreBoard {
     }
 
     var playersPerRound: Int { session.playersPerRound }
-
-    /// その人数にすると、入力済みの点数がある人が外れるか
-    func membersLosingEntries(forActiveCount count: Int) -> [Roster.Member] {
-        roster.membersDroppedBy(count).filter { hasEntries(id: $0.id) }
-    }
 
     func addMember() {
         roster.add(name: "プレイヤー\(roster.members.count + 1)")
