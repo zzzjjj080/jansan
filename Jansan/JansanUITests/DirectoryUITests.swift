@@ -439,3 +439,58 @@ extension DirectoryUITests {
             "自動バックアップが保存先に出ている")
     }
 }
+
+// MARK: - 三麻⇄四麻
+
+extension DirectoryUITests {
+
+    /// 上の「四麻」から人数を変えられること。点数が消えるときは断りが出ること
+    func testPlayStyleSwitchesPlayerCount() {
+        let app = launchApp()
+        let style = app.buttons["playStyle"]
+        XCTAssertTrue(style.waitForExistence(timeout: 20), "人数のボタンが無い")
+
+        // 空の表なら断りなしで三麻に変わる
+        app.buttons["newSession"].tap()
+        let reset = app.alerts.firstMatch
+        if reset.waitForExistence(timeout: 5) { reset.buttons["始める"].tap() }
+
+        style.tap()
+        app.buttons["三麻"].firstMatch.tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH '三麻'"))
+                        .firstMatch.waitForExistence(timeout: 10), "三麻にならない")
+        // 列が3つになっている
+        XCTAssertTrue(app.buttons["cell-0-2"].exists, "3列目が無い")
+        XCTAssertFalse(app.buttons["cell-0-3"].exists, "4列目が残っている")
+        attach(app, "三麻")
+
+        // 四麻に戻す
+        style.tap()
+        app.buttons["四麻"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["cell-0-3"].waitForExistence(timeout: 10), "四麻に戻らない")
+    }
+
+    /// 点数が入っている人が外れるときは、消えることを伝えてから変える
+    func testPlayStyleWarnsBeforeLosingScores() {
+        let app = launchApp()
+        XCTAssertTrue(app.buttons["cell-0-3"].waitForExistence(timeout: 20), "4列目が無い")
+
+        // 4人目に点数を入れる
+        app.buttons["cell-0-3"].tap()
+        for key in ["4", "0"] { app.buttons[key].firstMatch.tap() }
+        app.buttons["確定"].tap()
+
+        app.buttons["playStyle"].tap()
+        app.buttons["三麻"].firstMatch.tap()
+
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 10), "断りが出ない")
+        XCTAssertTrue(alert.staticTexts.containing(
+            NSPredicate(format: "label CONTAINS '消えます'")).firstMatch.exists,
+            "何が起きるか書かれていない")
+        attach(app, "人数変更の確認")
+
+        alert.buttons["やめる"].tap()
+        XCTAssertTrue(app.buttons["cell-0-3"].exists, "やめたのに列が消えている")
+    }
+}

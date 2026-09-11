@@ -77,6 +77,40 @@ public struct Roster: Equatable, Sendable, Codable {
         members[index].name = name.isEmpty ? "名前" : name
     }
 
+    /// 参加人数をまとめて変える。三麻⇄四麻の切り替えに使う。
+    ///
+    /// **いま参加している人をなるべく残す。** 増やすときは名簿の上から補い、
+    /// 減らすときは**後ろの人から外す**（先に座っていた人の列を守る）。
+    /// 名簿が足りないときは、足りるところまでで止める。
+    ///
+    /// - Returns: 実際に参加している人数
+    @discardableResult
+    public mutating func setActiveCount(_ count: Int) -> Int {
+        let target = max(1, min(count, Self.maxActive))
+        var active = members.enumerated().filter { $0.element.isActive }.map(\.offset)
+
+        while active.count > target {
+            members[active.removeLast()].isActive = false
+        }
+        if active.count < target {
+            for (index, member) in members.enumerated() where !member.isActive {
+                guard active.count < target else { break }
+                members[index].isActive = true
+                active.append(index)
+            }
+        }
+        return activeCount
+    }
+
+    /// その人数にするために、いま入力のある列が外れるか。
+    /// 外れるなら先に断りを入れたい
+    public func membersDroppedBy(_ count: Int) -> [Member] {
+        let target = max(1, min(count, Self.maxActive))
+        let active = members.filter(\.isActive)
+        guard active.count > target else { return [] }
+        return Array(active.suffix(active.count - target))
+    }
+
     /// 参加状態を切り替える。上限に達している場合は何もせず false を返す
     @discardableResult
     public mutating func toggleActive(at index: Int) -> Bool {

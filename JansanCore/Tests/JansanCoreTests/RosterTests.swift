@@ -103,3 +103,53 @@ struct RosterTests {
         #expect(roster.member(target)?.isActive == false)
     }
 }
+
+@Suite("人数をまとめて変える（三麻⇄四麻）")
+struct SetActiveCountTests {
+
+    private func roster() -> Roster {
+        Roster(names: ["中村", "五十嵐", "斎藤", "佐々木", "石井", "小野寺"], activeCount: 4)
+    }
+
+    @Test("4人から3人へ。後ろの人から外れる")
+    func shrink() {
+        var r = roster()
+        #expect(r.setActiveCount(3) == 3)
+        #expect(r.activeNames == ["中村", "五十嵐", "斎藤"])
+    }
+
+    @Test("3人から4人へ。名簿の上から補う")
+    func grow() {
+        var r = roster()
+        r.setActiveCount(3)
+        #expect(r.setActiveCount(4) == 4)
+        #expect(r.activeNames == ["中村", "五十嵐", "斎藤", "佐々木"])
+    }
+
+    @Test("上限を超えては増やせない")
+    func clampsToMax() {
+        var r = roster()
+        #expect(r.setActiveCount(99) == Roster.maxActive)
+    }
+
+    @Test("名簿が足りなければ足りるところまで")
+    func stopsWhenRosterIsShort() {
+        var r = Roster(names: ["A", "B"], activeCount: 2)
+        #expect(r.setActiveCount(4) == 2)
+    }
+
+    @Test("0人にはしない")
+    func keepsAtLeastOne() {
+        var r = roster()
+        #expect(r.setActiveCount(0) == 1)
+    }
+
+    @Test("外れる人を先に数えられる。断りを入れるために使う")
+    func listsDropped() {
+        let r = roster()
+        #expect(r.membersDroppedBy(3).map(\.name) == ["佐々木"])
+        #expect(r.membersDroppedBy(2).map(\.name) == ["斎藤", "佐々木"])
+        #expect(r.membersDroppedBy(4).isEmpty)
+        #expect(r.membersDroppedBy(6).isEmpty, "増やすときは誰も外れない")
+    }
+}

@@ -22,6 +22,8 @@ struct ContentView: View {
     @State private var didSave = false
     @State private var saveConfirm = false
     @State private var newSessionConfirm = false
+    /// 人数を減らすと点数が消える人がいるとき、その人数を控えて確認を出す
+    @State private var pendingActiveCount: Int?
     @AppStorage("currentDirectory") private var currentDirectoryID = Directory.defaultUID.uuidString
     @Query private var directories: [Directory]
     /// 初回だけ自動で出す。以後は設定の「使い方」から
@@ -42,6 +44,17 @@ struct ContentView: View {
                     Button("「\(currentDirectoryName)」に残す") { save() }
                 } message: {
                     Text(saveMessage)
+                }
+                .alert("人数を変えますか", isPresented: Binding(
+                    get: { pendingActiveCount != nil },
+                    set: { if !$0 { pendingActiveCount = nil } })) {
+                    Button("やめる", role: .cancel) { pendingActiveCount = nil }
+                    Button("変える", role: .destructive) {
+                        if let count = pendingActiveCount { board.setActiveCount(count) }
+                        pendingActiveCount = nil
+                    }
+                } message: {
+                    Text(activeCountMessage)
                 }
                 .alert("新しい対局を始めますか", isPresented: $newSessionConfirm) {
                     Button("やめる", role: .cancel) {}
@@ -86,6 +99,27 @@ struct ContentView: View {
 
     private var appBar: some View {
         HStack(spacing: 4) {
+            // いちばん左が保存。その隣に保存先。「残す」「どこに」が並ぶ
+            Button {
+                saveConfirm = true
+            } label: {
+                Group {
+                    if didSave {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 21, weight: .semibold))
+                    } else {
+                        FloppySaveIcon(size: 21)
+                    }
+                }
+                .foregroundStyle(Palette.accent)
+                .frame(width: 44, height: barHeight)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("saveGame")
+            .accessibilityLabel("この対局を記録に残す")
+            .sensoryFeedback(.success, trigger: didSave) { _, new in new }
+
             // 保存先は「表示」と「変更ボタン」を1つにする。
             // 別々にすると、そこで変えられることに気づかない
             Button {
@@ -108,38 +142,47 @@ struct ContentView: View {
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            // ボタンが増えて幅が足りなくなると、まず保存先の名前が潰れる。
-            // 名前が読めないと何に入るのか分からないので、ここを最優先で残す
-            .layoutPriority(2)
             .accessibilityIdentifier("pickDirectory")
             .accessibilityLabel("保存先: \(currentDirectoryName)")
             .accessibilityHint("タップすると保存先を変えられます")
+            // ボタンが増えて幅が足りなくなると、まず保存先の名前が潰れる。
+            // 名前が読めないと何に入るのか分からないので、ここを最優先で残す
+            .layoutPriority(2)
 
-            Text("\(board.session.players.count)人打ち")
-                .font(.system(size: 15, weight: .bold))
+            // 人数もここで変えられる。設定を開かずに三麻⇄四麻を行き来できる
+            Menu {
+                ForEach(Array(3...Roster.maxActive), id: \.self) { count in
+                    Button {
+                        requestActiveCount(count)
+                    } label: {
+                        Label(Self.playStyleLabel(count),
+                              systemImage: board.session.players.count == count ? "checkmark" : "")
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(Self.playStyleLabel(board.session.players.count))
+                        .font(.system(size: 15, weight: .bold))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .bold))
+                }
                 .foregroundStyle(Palette.accent)
-                .lineLimit(1)
-                .padding(.leading, 2)
+                .padding(.horizontal, 8)
                 .frame(height: barHeight)
-                .layoutPriority(1)
+                .background(Palette.accent.opacity(0.12), in: Capsule())
+                .contentShape(Capsule())
+            }
+            .accessibilityIdentifier("playStyle")
+            .accessibilityLabel("\(Self.playStyleLabel(board.session.players.count))。タップで人数を変えられます")
+            .layoutPriority(1)
 
             Spacer(minLength: 0)
 
-            // 並びは「見る → 残す → 次へ → 設定」。
-            // **保存と新規セッションを隣に置く。**終局後はこの順に押すので、
-            // 読む順と操作の順が一致する。記号の形も folder / 時計回りで大きく違うため取り違えにくい。
-            // 破壊的な新規セッションを端に置かないのは、端は無意識に触りやすいため
+            // 右は「見る → 次へ → 設定」。
+            // 保存は左の保存先チップの隣に移したので、破壊的な新規セッションとは離れている
             barButton("chart.line.uptrend.xyaxis", id: "openStats", label: "ビュー") {
                 sheet = .stats
             }
-
-            // 記録に残す。**矢印は左から右へ。**
-            // 上から入る形にしたら縦長になり、帯の高さを押し上げていた
-            barButton("arrow.forward.folder.fill", id: "saveGame",
-                      label: "この対局を記録に残す", filled: didSave) {
-                saveConfirm = true
-            }
-            .sensoryFeedback(.success, trigger: didSave) { _, new in new }
 
             barButton("arrow.clockwise", id: "newSession", label: "新しい対局を始める") {
                 newSessionConfirm = true
@@ -171,6 +214,33 @@ struct ContentView: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier(id)
         .accessibilityLabel(label)
+    }
+
+    /// 人数の呼び方。**三麻・四麻が一般的**なので、3人4人はそちらに合わせる。
+    /// 5人以上は決まった呼び方が無いので「◯人打ち」のままにする
+    static func playStyleLabel(_ count: Int) -> String {
+        switch count {
+        case 3: "三麻"
+        case 4: "四麻"
+        default: "\(count)人打ち"
+        }
+    }
+
+    /// 人数を変える。点数が消える人がいるときだけ断りを入れる
+    private func requestActiveCount(_ count: Int) {
+        guard count != board.session.players.count else { return }
+        if board.membersLosingEntries(forActiveCount: count).isEmpty {
+            board.setActiveCount(count)
+        } else {
+            pendingActiveCount = count
+        }
+    }
+
+    private var activeCountMessage: String {
+        guard let count = pendingActiveCount else { return "" }
+        let names = board.membersLosingEntries(forActiveCount: count).map(\.name).joined(separator: "・")
+        return "\(Self.playStyleLabel(count))にすると「\(names)」が表から外れ、"
+            + "入力済みの点数も一緒に消えます。取り消しから戻せます。"
     }
 
     private var newSessionMessage: String {
