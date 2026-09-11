@@ -23,12 +23,12 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 membersSection
+                appearanceSection
+                howToSection
                 scoreFormatSection
                 autoAdvanceSection
-                appearanceSection
                 recordSection
                 backupSection
-                howToSection
                 FeedbackSection()
                 CoffeeTipSection(tipJar: tipJar, tint: Palette.toneAInk)
                 eraseSection
