@@ -34,6 +34,25 @@ final class DirectoryUITests: XCTestCase {
         XCTAssertFalse(alert.waitForExistence(timeout: 3), "確認が閉じていない")
     }
 
+    /// 設定を開く。起動直後の1回目は飲まれることがあるので、効かなければ押し直す
+    private func openSettings(_ app: XCUIApplication) {
+        let gear = app.buttons["openSettings"]
+        XCTAssertTrue(gear.waitForExistence(timeout: 20), "設定ボタンが無い")
+        gear.tap()
+        if !app.navigationBars["設定"].waitForExistence(timeout: 8) { gear.tap() }
+        XCTAssertTrue(app.navigationBars["設定"].waitForExistence(timeout: 15), "設定が開かない")
+    }
+
+    /// 目当ての要素が押せるようになるまで送る
+    @discardableResult
+    private func scrollTo(_ app: XCUIApplication, _ element: XCUIElement, tries: Int = 10) -> Bool {
+        for _ in 0..<tries {
+            if element.exists && element.isHittable { return true }
+            app.swipeUp()
+        }
+        return element.exists && element.isHittable
+    }
+
     /// 保存先を「マイ記録」に戻す。
     /// **@AppStorage は起動をまたいで残る。** 前のテストが保存先を変えたままだと、
     /// 次のテストが別のディレクトリへ保存して「記録が無い」と誤検知する
@@ -444,30 +463,83 @@ extension DirectoryUITests {
 
 extension DirectoryUITests {
 
-    /// 上の「四麻」から人数を変えられること。点数が消えるときは断りが出ること
-    func testPlayStyleSwitchesPlayerCount() {
+    /// **メンバーを消しても、保存済みの記録は消えないこと。**
+    /// 同じ名前で登録し直せば、集計でも同じ人として束ねられる
+    func testDeletingMemberKeepsSavedRecords() {
+        let app = launchApp()
+        useDefaultDirectory(app)
+
+        // 記録を1つ作る
+        openSettings(app)
+        let seed = app.buttons["デモデータを3局入れる"]
+        XCTAssertTrue(scrollTo(app, seed), "デモデータのボタンが無い")
+        seed.tap()
+        tapSave(app)
+
+        // 佐々木を名簿から消す
+        openSettings(app)
+        let row = app.staticTexts["佐々木"]
+        XCTAssertTrue(scrollTo(app, row), "メンバーが見当たらない")
+        app.buttons.matching(NSPredicate(format: "label == 'trash'")).element(boundBy: 3).tap()
+        let confirm = app.alerts.firstMatch
+        if confirm.waitForExistence(timeout: 5) { confirm.buttons["削除"].tap() }
+        app.navigationBars["設定"].buttons["完了"].tap()
+
+        // 保存した記録には佐々木が残っている
+        openRecordsTab(app)
+        let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
+        XCTAssertTrue(mine.waitForExistence(timeout: 10))
+        mine.tap()
+        let record = app.buttons.matching(NSPredicate(format: "label CONTAINS '佐々木'")).firstMatch
+        XCTAssertTrue(record.waitForExistence(timeout: 10),
+                      "メンバーを消したら保存済みの記録からも消えている")
+        attach(app, "メンバー削除後も記録は残る")
+    }
+
+    /// 上のボタンから打ち方（三麻／四麻）を変えられること。
+    /// **参加人数とは別物**で、同じメニューの中で段が分かれている
+    func testPlayStyleSwitchesBetweenThreeAndFour() {
         let app = launchApp()
         let style = app.buttons["playStyle"]
-        XCTAssertTrue(style.waitForExistence(timeout: 20), "人数のボタンが無い")
+        XCTAssertTrue(style.waitForExistence(timeout: 20), "打ち方のボタンが無い")
 
-        // 空の表なら断りなしで三麻に変わる
+        // まっさらにしてから切り替える
         app.buttons["newSession"].tap()
         let reset = app.alerts.firstMatch
         if reset.waitForExistence(timeout: 5) { reset.buttons["始める"].tap() }
 
         style.tap()
-        app.buttons["三麻"].firstMatch.tap()
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH '三麻'"))
-                        .firstMatch.waitForExistence(timeout: 10), "三麻にならない")
-        // 列が3つになっている
-        XCTAssertTrue(app.buttons["cell-0-2"].exists, "3列目が無い")
-        XCTAssertFalse(app.buttons["cell-0-3"].exists, "4列目が残っている")
-        attach(app, "三麻")
+        XCTAssertTrue(app.buttons["三麻"].waitForExistence(timeout: 10), "打ち方の選択肢が無い")
+        XCTAssertTrue(app.buttons["4人"].exists, "参加人数の選択肢が無い")
+        attach(app, "打ち方と参加人数")
+        app.buttons["三麻"].tap()
+
+        // 参加4人のまま三麻になるので「三麻・4人」と出る
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH '三麻・4人'"))
+                        .firstMatch.waitForExistence(timeout: 10), "三麻になっていない")
+        // 列は4つのまま（参加人数は変えていない）
+        XCTAssertTrue(app.buttons["cell-0-3"].exists, "参加人数まで減っている")
+
+        // 2人入れたら、3人目をタップで指す状態になる
+        app.buttons["cell-0-0"].tap()
+        for key in ["3", "0"] { app.buttons[key].firstMatch.tap() }
+        app.buttons["確定"].tap()
+        app.buttons["cell-0-1"].tap()
+        for key in ["1", "0"] { app.buttons[key].firstMatch.tap() }
+        app.buttons["確定"].tap()
+        attach(app, "三麻で2人入力")
+
+        app.buttons["cell-0-2"].tap()
+        XCTAssertEqual(app.buttons["cell-0-2"].value as? String, "-40 自動計算",
+                       "3人目を指しても逆算されない")
+        XCTAssertEqual(app.buttons["cell-0-3"].value as? String, "お休み",
+                       "打たなかった人がお休みになっていない")
 
         // 四麻に戻す
         style.tap()
-        app.buttons["四麻"].firstMatch.tap()
-        XCTAssertTrue(app.buttons["cell-0-3"].waitForExistence(timeout: 10), "四麻に戻らない")
+        app.buttons["四麻"].tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH '四麻'"))
+                        .firstMatch.waitForExistence(timeout: 10), "四麻に戻らない")
     }
 
     /// 点数が入っている人が外れるときは、消えることを伝えてから変える
@@ -481,7 +553,7 @@ extension DirectoryUITests {
         app.buttons["確定"].tap()
 
         app.buttons["playStyle"].tap()
-        app.buttons["三麻"].firstMatch.tap()
+        app.buttons["3人"].tap()
 
         let alert = app.alerts.firstMatch
         XCTAssertTrue(alert.waitForExistence(timeout: 10), "断りが出ない")

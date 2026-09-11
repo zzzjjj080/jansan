@@ -199,7 +199,9 @@ struct ContentView: View {
                 sheet = .stats
             }
 
-            barButton("arrow.clockwise", id: "newSession", label: "新しい対局を始める") {
+            // 時計回りの矢印は「やり直す」にも読めた。新しい表が出ることを絵で出す
+            barButton("plus.rectangle.on.rectangle", id: "newSession",
+                      label: "新しい対局を始める") {
                 newSessionConfirm = true
             }
 

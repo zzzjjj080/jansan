@@ -13,7 +13,6 @@ struct SettingsView: View {
     @State private var didSave = false
     @State private var limitAlert = false
     @State private var pendingDeletion: Roster.Member.ID?
-    @State private var resetConfirm = false
     @State private var pendingDeactivation: Roster.Member.ID?
     @State private var showHowTo = false
     @State private var showBackup = false
@@ -23,8 +22,6 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                undoSection
-                newSessionSection
                 membersSection
                 inputSection
                 appearanceSection
@@ -82,18 +79,6 @@ struct SettingsView: View {
                          : "「\(member.name)」を名簿から完全に削除します。")
                 }
             }
-            .confirmationDialog("新規セッションにしますか", isPresented: $resetConfirm, titleVisibility: .visible) {
-                Button("記録に残してから始める") {
-                    board.archiveCurrentGame()
-                    board.resetSession()
-                }
-                Button("記録に残さず始める", role: .destructive) {
-                    board.resetSession()
-                }
-                Button("やめる", role: .cancel) {}
-            } message: {
-                Text("いまの表は消えます。あとで見返したい対局なら、残してから始めてください。")
-            }
             .confirmationDialog(
                 pendingDeactivation.flatMap { board.roster.member($0) }
                     .map { "「\($0.name)」を今回の参加から外しますか" } ?? "",
@@ -129,9 +114,9 @@ struct SettingsView: View {
                 Label("新しいメンバーを登録", systemImage: "plus.circle.fill")
             }
         } header: {
-            Text("参加メンバー（\(board.roster.activeCount)人）")
+            Text("メンバー登録")
         } footer: {
-            Text("チェックを入れた人がそのまま表の列になります。人数はここで決まります。外したメンバーも名簿には残ります。5〜6人のときは、3人分入力したあと実際に打った4人目をタップすると自動で確定します。")
+            Text("チェックを入れた人が表の列になります。外した人も名簿には残ります。保存した記録は、ここで消しても残ります。")
         }
     }
 
@@ -193,8 +178,6 @@ struct SettingsView: View {
             }
         } header: {
             Text("書き出し")
-        } footer: {
-            Text("入力中の表を、表計算ソフトなどで読める形にします。人が読むためのもので、ここからは戻せません。記録を残すのは入力画面の保存ボタン、控えを取るのは「バックアップ」です。")
         }
     }
 
@@ -263,37 +246,6 @@ struct SettingsView: View {
         }
     }
 
-    /// 上のボタンからは外したが、機能は残す。
-    /// 「新規セッション」や「記録の読み込み」を押し間違えたときの戻り道が無くなるため
-    private var undoSection: some View {
-        Section {
-            Button {
-                board.undoLastChange()
-                dismiss()
-            } label: {
-                Label("直前の操作を取り消す", systemImage: "arrow.uturn.backward")
-            }
-            .disabled(!board.canUndo)
-            .accessibilityIdentifier("undo")
-        } footer: {
-            Text(board.canUndo
-                 ? "点数の確定・お休み・マスの消去・局の削除・メンバーの増減・記録の読み込み・新規セッションを、1つずつ戻せます。"
-                 : "いまは戻せる操作がありません。")
-        }
-    }
-
-    private var newSessionSection: some View {
-        Section {
-            Button {
-                resetConfirm = true
-            } label: {
-                Label("新規セッションにする", systemImage: "arrow.clockwise")
-            }
-        } footer: {
-            Text("いまの対局を終えて、次の半荘を始めるときに使います。")
-        }
-    }
-
     private var appearanceSection: some View {
         Section {
             Picker("表示", selection: $appTheme) {
@@ -304,8 +256,6 @@ struct SettingsView: View {
             .pickerStyle(.segmented)
         } header: {
             Text("見た目")
-        } footer: {
-            Text("「端末に合わせる」はiPhoneのライト/ダーク設定に従います。暗い場所で打つときはダーク固定が読みやすいことがあります。")
         }
     }
 
