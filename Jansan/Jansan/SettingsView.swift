@@ -138,6 +138,9 @@ struct SettingsView: View {
                     .foregroundStyle(member.isActive ? Palette.accent : Palette.inkDim)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("\(member.name)")
+            .accessibilityValue(member.isActive ? "参加" : "不参加")
+            .accessibilityAddTraits(member.isActive ? [.isSelected, .isButton] : .isButton)
 
             TextField("名前", text: Binding(
                 // 値そのものを使う。ここで配列を引き直すと削除直後に落ちる
@@ -151,6 +154,9 @@ struct SettingsView: View {
                 Image(systemName: "trash").foregroundStyle(Palette.negative)
             }
             .buttonStyle(.plain)
+            // 読み上げで「trash」としか読まれなかった。誰を消すのかを言う
+            .accessibilityIdentifier("deleteMember-\(member.name)")
+            .accessibilityLabel("「\(member.name)」を名簿から削除")
         }
     }
 

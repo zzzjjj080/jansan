@@ -333,7 +333,16 @@ extension DirectoryUITests {
         for key in ["1", "2"] { app.buttons[key].firstMatch.tap() }
         app.buttons["確定"].tap()
 
-        app.buttons["saveGame"].tap()
+        // いまの件数を控えておく
+        openRecordsTab(app)
+        let before = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
+        XCTAssertTrue(before.waitForExistence(timeout: 10))
+        let labelBefore = before.label
+        app.segmentedControls.firstMatch.buttons["入力"].tap()
+
+        let save = app.buttons["saveGame"]
+        XCTAssertTrue(save.waitForExistence(timeout: 10))
+        save.tap()
         let alert = app.alerts.firstMatch
         XCTAssertTrue(alert.waitForExistence(timeout: 10), "確認が出ない")
         XCTAssertTrue(alert.buttons.matching(NSPredicate(format: "label ENDSWITH 'に残す'")).firstMatch.exists,
@@ -342,12 +351,12 @@ extension DirectoryUITests {
                         .firstMatch.exists, "何を残すのかが書かれていない")
         attach(app, "保存の確認")
 
-        // やめれば入らない
+        // やめれば増えない。**前のテストが残した件数があるので、増減で見る**
         alert.buttons["やめる"].tap()
         openRecordsTab(app)
         let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
         XCTAssertTrue(mine.waitForExistence(timeout: 10))
-        XCTAssertTrue(mine.label.contains("0 件"), "やめたのに保存されている: \(mine.label)")
+        XCTAssertEqual(mine.label, labelBefore, "やめたのに保存されている: \(mine.label)")
     }
 }
 
@@ -476,13 +485,14 @@ extension DirectoryUITests {
         seed.tap()
         tapSave(app)
 
-        // 佐々木を名簿から消す
+        // 佐々木を名簿から消す。**並び順に頼らず識別子で指す**
         openSettings(app)
-        let row = app.staticTexts["佐々木"]
-        XCTAssertTrue(scrollTo(app, row), "メンバーが見当たらない")
-        app.buttons.matching(NSPredicate(format: "label == 'trash'")).element(boundBy: 3).tap()
+        let trash = app.buttons["deleteMember-佐々木"]
+        XCTAssertTrue(scrollTo(app, trash), "佐々木の削除ボタンが見当たらない")
+        trash.tap()
         let confirm = app.alerts.firstMatch
-        if confirm.waitForExistence(timeout: 5) { confirm.buttons["削除"].tap() }
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10), "削除の確認が出ない")
+        confirm.buttons["削除"].tap()
         app.navigationBars["設定"].buttons["完了"].tap()
 
         // 保存した記録には佐々木が残っている
@@ -510,29 +520,32 @@ extension DirectoryUITests {
 
         style.tap()
         XCTAssertTrue(app.buttons["三麻"].waitForExistence(timeout: 10), "打ち方の選択肢が無い")
-        attach(app, "打ち方と参加人数")
+        attach(app, "打ち方の選択")
         app.buttons["三麻"].tap()
 
-        // 参加4人のまま三麻になるので「三麻・4人」と出る
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH '三麻・4人'"))
+        // **参加人数は前のテストで変わりうる**ので、打ち方だけを見る。
+        // 見出しは参加人数が多いときだけ「三麻・4人」のように人数が付く
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH '三麻'"))
                         .firstMatch.waitForExistence(timeout: 10), "三麻になっていない")
-        // 列は4つのまま（参加人数は変えていない）
-        XCTAssertTrue(app.buttons["cell-0-3"].exists, "参加人数まで減っている")
 
-        // 2人入れたら、3人目をタップで指す状態になる
+        // 2人ぶん入れる
         app.buttons["cell-0-0"].tap()
         for key in ["3", "0"] { app.buttons[key].firstMatch.tap() }
         app.buttons["確定"].tap()
         app.buttons["cell-0-1"].tap()
         for key in ["1", "0"] { app.buttons[key].firstMatch.tap() }
         app.buttons["確定"].tap()
-        attach(app, "三麻で2人入力")
 
-        app.buttons["cell-0-2"].tap()
-        XCTAssertEqual(app.buttons["cell-0-2"].value as? String, "-40 自動計算",
-                       "3人目を指しても逆算されない")
-        XCTAssertEqual(app.buttons["cell-0-3"].value as? String, "お休み",
-                       "打たなかった人がお休みになっていない")
+        let third = app.buttons["cell-0-2"]
+        if app.buttons["cell-0-3"].exists {
+            // 参加4人以上なら、打った3人目をタップで指す
+            XCTAssertEqual(third.value as? String, "未入力", "指す前から埋まっている")
+            third.tap()
+            XCTAssertEqual(app.buttons["cell-0-3"].value as? String, "お休み",
+                           "打たなかった人がお休みになっていない")
+        }
+        XCTAssertEqual(third.value as? String, "-40 自動計算", "3人目が逆算されていない")
+        attach(app, "三麻で入力")
 
         // 四麻に戻す
         style.tap()

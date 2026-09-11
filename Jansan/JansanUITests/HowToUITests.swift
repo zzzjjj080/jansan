@@ -23,10 +23,10 @@ final class HowToUITests: XCTestCase {
 
         XCTAssertTrue(app.navigationBars["雀算の使い方"].waitForExistence(timeout: 20),
                       "初回に使い方が出ない")
-        XCTAssertTrue(app.staticTexts["名前は変えられます"].exists, "改名の説明が無い")
-        XCTAssertTrue(app.staticTexts["人数は3〜6人まで"].exists, "人数の説明が無い")
-        XCTAssertTrue(app.staticTexts["「−」はマイナスの点数"].exists, "− の説明が無い")
-        XCTAssertTrue(app.staticTexts["「お休み」は抜け番"].exists, "お休みの説明が無い")
+        // 図と表に作り直したので、見出しで確かめる
+        XCTAssertTrue(app.staticTexts["点数を入れる"].exists, "点数の説明が無い")
+        XCTAssertTrue(app.staticTexts["上のボタン"].exists, "ボタンの説明が無い")
+        XCTAssertTrue(app.staticTexts["三麻と四麻"].exists, "三麻の説明が無い")
 
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "使い方-初回"
@@ -57,13 +57,16 @@ final class HowToUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["設定"].waitForExistence(timeout: 15))
 
         let howTo = app.buttons["showHowTo"]
-        for _ in 0..<6 where !howTo.isHittable { app.swipeUp() }
-        XCTAssertTrue(howTo.waitForExistence(timeout: 10), "設定に「使い方」が無い")
+        for _ in 0..<8 {
+            if howTo.exists && howTo.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(howTo.exists && howTo.isHittable, "設定に「使い方」が無い")
         howTo.tap()
 
         XCTAssertTrue(app.navigationBars["雀算の使い方"].waitForExistence(timeout: 10),
                       "設定から使い方が開かない")
-        XCTAssertTrue(app.staticTexts["「お休み」は抜け番"].exists)
+        XCTAssertTrue(app.staticTexts["点数を入れる"].exists)
 
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "使い方-設定から"
