@@ -196,11 +196,12 @@ final class NewFeaturesUITests: XCTestCase {
         let app = launchApp()
         makeRecords(app, count: 2)
 
-        app.buttons["openStats"].tap()
-        XCTAssertTrue(app.navigationBars["ビュー"].waitForExistence(timeout: 15), "ビューが開かない")
-
-        app.buttons["showAllStats"].tap()
-        XCTAssertTrue(app.navigationBars["全記録のビュー"].waitForExistence(timeout: 15), "全記録のビューが開かない")
+        // 集計はディレクトリごとに見る。入力中の表だけのグラフは置いていない
+        openMyRecords(app)
+        app.buttons["directoryStats"].tap()
+        XCTAssertTrue(app.navigationBars.matching(
+            NSPredicate(format: "identifier CONTAINS 'の集計'")).firstMatch.waitForExistence(timeout: 15),
+            "ディレクトリの集計が開かない")
 
         // 少なくとも今作った2対局は集計されている。
         // 「全記録」は他のディレクトリも合算するので、前のテストが残した分が上乗せされうる
@@ -281,10 +282,11 @@ extension NewFeaturesUITests {
         let app = launchApp()
         makeRecords(app, count: 2)
 
-        app.buttons["openStats"].tap()
-        XCTAssertTrue(app.navigationBars["ビュー"].waitForExistence(timeout: 15))
-        app.buttons["showAllStats"].tap()
-        XCTAssertTrue(app.navigationBars["全記録のビュー"].waitForExistence(timeout: 15))
+        openMyRecords(app)
+        app.buttons["directoryStats"].tap()
+        XCTAssertTrue(app.navigationBars.matching(
+            NSPredicate(format: "identifier CONTAINS 'の集計'")).firstMatch.waitForExistence(timeout: 15),
+            "ディレクトリの集計が開かない")
 
         let make = app.buttons["makeImages"]
         XCTAssertTrue(make.waitForExistence(timeout: 10), "画像の導線が無い")

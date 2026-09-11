@@ -15,7 +15,7 @@ struct ContentView: View {
     @State private var sheet: SheetKind?
 
     private enum SheetKind: String, Identifiable {
-        case settings, stats, howTo, export, pickDirectory
+        case settings, howTo, export, pickDirectory
         var id: String { rawValue }
     }
 
@@ -77,7 +77,6 @@ struct ContentView: View {
         .sheet(item: $sheet) { kind in
             switch kind {
             case .settings: SettingsView(board: board, appTheme: $appTheme)
-            case .stats:    StatsView(board: board)
             case .howTo:    HowToView()
             case .export:   ExportView(board: board)
             case .pickDirectory: DirectoryPickerView()
@@ -193,12 +192,8 @@ struct ContentView: View {
 
             Spacer(minLength: 0)
 
-            // 右は「見る → 次へ → 設定」。
-            // 保存は左の保存先チップの隣に移したので、破壊的な新規セッションとは離れている
-            barButton("chart.line.uptrend.xyaxis", id: "openStats", label: "ビュー") {
-                sheet = .stats
-            }
-
+            // 右は「次へ」と「設定」。集計はディレクトリごとに見るので、
+            // 入力中の表だけのグラフは置かない（フォルダを開いて見る）
             // 時計回りの矢印は「やり直す」にも読めた。新しい表が出ることを絵で出す
             barButton("plus.rectangle.on.rectangle", id: "newSession",
                       label: "新しい対局を始める") {
