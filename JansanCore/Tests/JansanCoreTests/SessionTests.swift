@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import JansanCore
 
@@ -259,5 +260,96 @@ struct PlayerChangeTests {
         #expect(session.rounds[0].entries[0] == .entered(-32))
         #expect(session.rounds[0].entries[1] == .entered(71))
         #expect(session.rounds[0].entries[2] == .derived(-39)) // 3人になったので逆算が成立する
+    }
+}
+
+@Suite("三麻と四麻（打つ人数と参加人数は別物）")
+struct PlayersPerRoundTests {
+
+    private let four = ["中村", "五十嵐", "斎藤", "佐々木"]
+    private let five = ["中村", "五十嵐", "斎藤", "佐々木", "石井"]
+
+    @Test("既定は四麻")
+    func defaultsToFour() {
+        #expect(Session(players: four).playersPerRound == 4)
+    }
+
+    @Test("参加3人の三麻は、2人入れれば残りが逆算される")
+    func threePlayersThreeMa() {
+        var s = Session(players: ["中村", "五十嵐", "斎藤"], playersPerRound: 3)
+        s.enter(30, at: Position(round: 0, column: 0))
+        s.enter(-10, at: Position(round: 0, column: 1))
+        #expect(s.rounds[0].entries[2] == .derived(-20))
+        #expect(s.needsWinnerDesignation(at: 0) == false)
+    }
+
+    @Test("参加4人の三麻は、2人入れたあと3人目をタップで指す")
+    func fourPlayersThreeMa() {
+        var s = Session(players: four, playersPerRound: 3)
+        s.enter(30, at: Position(round: 0, column: 0))
+        s.enter(-10, at: Position(round: 0, column: 1))
+        #expect(s.needsWinnerDesignation(at: 0), "3人目を待っていない")
+
+        s.designateWinner(at: Position(round: 0, column: 3))
+        #expect(s.rounds[0].entries[3] == .derived(-20))
+        #expect(s.rounds[0].entries[2].isResting, "打たなかった人がお休みになっていない")
+    }
+
+    @Test("参加5人の四麻は、これまでどおり4人目を指す")
+    func fivePlayersFourMa() {
+        var s = Session(players: five)
+        s.enter(30, at: Position(round: 0, column: 0))
+        s.enter(-10, at: Position(round: 0, column: 1))
+        #expect(s.needsWinnerDesignation(at: 0) == false, "まだ3人目の入力待ち")
+        s.enter(-5, at: Position(round: 0, column: 2))
+        #expect(s.needsWinnerDesignation(at: 0))
+    }
+
+    @Test("打ち方を変えても、入力済みの局は書き換えない")
+    func keepsEnteredRounds() {
+        var s = Session(players: four)
+        s.enter(30, at: Position(round: 0, column: 0))
+        s.enter(10, at: Position(round: 0, column: 1))
+        s.enter(-10, at: Position(round: 0, column: 2))
+        let before = s.rounds[0]
+
+        s.setPlayersPerRound(3)
+        #expect(s.rounds[0] == before, "打ち終わった局が変わってしまった")
+    }
+
+    @Test("空の局に残ったお休み印は外す。三麻に変えたのに打てない人が出ないように")
+    func clearsRestingOnEmptyRounds() {
+        var s = Session(players: five)
+        // 1局目を4人で打ち、5人目は自動でお休みになる
+        s.enter(30, at: Position(round: 0, column: 0))
+        s.enter(10, at: Position(round: 0, column: 1))
+        s.enter(-10, at: Position(round: 0, column: 2))
+        s.designateWinner(at: Position(round: 0, column: 3))
+        #expect(s.rounds[0].entries[4].isResting)
+
+        // 2局目は空。ここのお休み印は残さない
+        s.toggleResting(at: Position(round: 1, column: 0))
+        s.setPlayersPerRound(3)
+        #expect(s.rounds[1].entries.allSatisfy { !$0.isResting }, "空の局にお休みが残っている")
+        #expect(s.rounds[0].entries[4].isResting, "打ち終わった局は触らない")
+    }
+
+    @Test("参加人数より多くは打てない")
+    func clampsToParticipants() {
+        var s = Session(players: ["中村", "五十嵐", "斎藤"])
+        s.setPlayersPerRound(4)
+        #expect(s.playersPerRound == 3)
+    }
+
+    @Test("前の版で保存した表は四麻として読める")
+    func decodesOldPayload() throws {
+        // playersPerRound を持たないJSON。ここが壊れると記録が丸ごと読めなくなる
+        let json = """
+        {"players":["中村","五十嵐","斎藤","佐々木"],"decimalMode":false,
+         "rounds":[{"entries":[{"empty":{}},{"empty":{}},{"empty":{}},{"empty":{}}]}]}
+        """
+        let restored = try? JSONDecoder().decode(Session.self, from: Data(json.utf8))
+        #expect(restored?.playersPerRound == 4, "既定の四麻として読めていない")
+        #expect(restored?.players.count == 4)
     }
 }

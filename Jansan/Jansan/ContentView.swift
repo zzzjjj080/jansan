@@ -149,20 +149,35 @@ struct ContentView: View {
             // 名前が読めないと何に入るのか分からないので、ここを最優先で残す
             .layoutPriority(2)
 
-            // 人数もここで変えられる。設定を開かずに三麻⇄四麻を行き来できる
+            // 打ち方と参加人数は別物。**1つのボタンにまとめて、中で2段に分ける。**
+            // 5人集まって四麻を回すことも、4人で三麻を回す（毎局ひとり抜ける）こともある
             Menu {
-                ForEach(Array(3...Roster.maxActive), id: \.self) { count in
-                    Button {
-                        requestActiveCount(count)
-                    } label: {
-                        Label(Self.playStyleLabel(count),
-                              systemImage: board.session.players.count == count ? "checkmark" : "")
+                Section("打ち方") {
+                    ForEach(Session.playersPerRoundChoices, id: \.self) { count in
+                        Button {
+                            board.setPlayersPerRound(count)
+                        } label: {
+                            Label(Self.styleName(count),
+                                  systemImage: board.playersPerRound == count ? "checkmark" : "")
+                        }
+                        .disabled(count > board.session.players.count)
+                    }
+                }
+                Section("参加人数") {
+                    ForEach(Array(2...Roster.maxActive), id: \.self) { count in
+                        Button {
+                            requestActiveCount(count)
+                        } label: {
+                            Label("\(count)人",
+                                  systemImage: board.session.players.count == count ? "checkmark" : "")
+                        }
                     }
                 }
             } label: {
                 HStack(spacing: 4) {
-                    Text(Self.playStyleLabel(board.session.players.count))
+                    Text(playStyleCaption)
                         .font(.system(size: 15, weight: .bold))
+                        .lineLimit(1)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 10, weight: .bold))
                 }
@@ -173,7 +188,7 @@ struct ContentView: View {
                 .contentShape(Capsule())
             }
             .accessibilityIdentifier("playStyle")
-            .accessibilityLabel("\(Self.playStyleLabel(board.session.players.count))。タップで人数を変えられます")
+            .accessibilityLabel("\(playStyleCaption)。タップで打ち方と参加人数を変えられます")
             .layoutPriority(1)
 
             Spacer(minLength: 0)
@@ -216,14 +231,21 @@ struct ContentView: View {
         .accessibilityLabel(label)
     }
 
-    /// 人数の呼び方。**三麻・四麻が一般的**なので、3人4人はそちらに合わせる。
-    /// 5人以上は決まった呼び方が無いので「◯人打ち」のままにする
-    static func playStyleLabel(_ count: Int) -> String {
-        switch count {
+    /// 打ち方の呼び方。**三麻・四麻が一般的**なのでそちらに合わせる
+    static func styleName(_ playersPerRound: Int) -> String {
+        switch playersPerRound {
         case 3: "三麻"
         case 4: "四麻"
-        default: "\(count)人打ち"
+        default: "\(playersPerRound)人打ち"
         }
+    }
+
+    /// 上に出す見出し。参加人数が打つ人数と同じなら打ち方だけでよい。
+    /// 多いときは「四麻・5人」のように並べて、毎局ひとり抜けることが分かるようにする
+    private var playStyleCaption: String {
+        let style = Self.styleName(board.playersPerRound)
+        let participants = board.session.players.count
+        return participants == board.playersPerRound ? style : "\(style)・\(participants)人"
     }
 
     /// 人数を変える。点数が消える人がいるときだけ断りを入れる
@@ -239,7 +261,7 @@ struct ContentView: View {
     private var activeCountMessage: String {
         guard let count = pendingActiveCount else { return "" }
         let names = board.membersLosingEntries(forActiveCount: count).map(\.name).joined(separator: "・")
-        return "\(Self.playStyleLabel(count))にすると「\(names)」が表から外れ、"
+        return "参加\(count)人にすると「\(names)」が表から外れ、"
             + "入力済みの点数も一緒に消えます。取り消しから戻せます。"
     }
 

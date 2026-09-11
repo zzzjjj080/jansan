@@ -20,10 +20,41 @@ public struct Session: Equatable, Sendable, Codable {
     /// 保持する値は常に整数で、表示のときだけ解釈を変える
     public var decimalMode: Bool
 
-    public init(players: [String], decimalMode: Bool = false) {
+    /// **1局を何人で打つか。** 三麻なら3、四麻なら4。
+    ///
+    /// 参加人数（`players.count`）とは別物。5人が集まって四麻を回すこともあれば、
+    /// 4人が集まって三麻を回す（毎局ひとり抜ける）こともある。
+    /// 以前はここが4に決め打ちで、参加人数がちょうど3のときしか三麻にならなかった。
+    public var playersPerRound: Int = Session.defaultPlayersPerRound
+
+    public static let defaultPlayersPerRound = 4
+    /// 選べる打ち方。3人未満では点数の逆算が成り立たない
+    public static let playersPerRoundChoices = [3, 4]
+
+    public init(players: [String], decimalMode: Bool = false,
+                playersPerRound: Int = Session.defaultPlayersPerRound) {
         self.players = players
         self.rounds = [Round(playerCount: players.count)]
         self.decimalMode = decimalMode
+        self.playersPerRound = playersPerRound
+    }
+
+    // MARK: - 保存との互換
+
+    private enum CodingKeys: String, CodingKey {
+        case players, rounds, decimalMode, playersPerRound
+    }
+
+    /// **前の版で保存した表には playersPerRound が無い。**
+    /// 合成された init(from:) のままだと、そこで復号が失敗して記録が丸ごと読めなくなる
+    /// （引き継ぎ書 4-77）。無ければ四麻として読む
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        players = try c.decode([String].self, forKey: .players)
+        rounds = try c.decode([Round].self, forKey: .rounds)
+        decimalMode = try c.decode(Bool.self, forKey: .decimalMode)
+        playersPerRound = try c.decodeIfPresent(Int.self, forKey: .playersPerRound)
+            ?? Session.defaultPlayersPerRound
     }
 
     // MARK: - 合計
@@ -50,6 +81,29 @@ public struct Session: Equatable, Sendable, Codable {
         appendRoundIfNeeded()
     }
 
+    /// 打ち方（三麻／四麻）を変える。
+    ///
+    /// **入力済みの局には触らない。** 打ち終わった局の着順を後から書き換えると、
+    /// 集計の意味が変わってしまう（過去のデータを後から書き換えない）。
+    /// 変わるのは、これから入力する局の「あと1人」の求め方だけ。
+    ///
+    /// ただし**入力がまったく無い局のお休み印は外す。** 四麻で自動的にお休みに
+    /// なっていた人が、三麻に変えたあとも打てないままになるのを防ぐ
+    public mutating func setPlayersPerRound(_ count: Int) {
+        let target = max(2, min(count, players.count))
+        guard target != playersPerRound else { return }
+        playersPerRound = target
+
+        for index in rounds.indices {
+            let hasInput = rounds[index].entries.contains { $0.value != nil }
+            guard !hasInput else { continue }
+            for column in rounds[index].entries.indices where rounds[index].entries[column].isResting {
+                rounds[index].entries[column] = .empty
+            }
+        }
+        appendRoundIfNeeded()
+    }
+
     /// 「お休み」の手動切り替え。5〜6人打ちの自動お休みとは別に、上書き用として残してある
     public mutating func toggleResting(at position: Position) {
         let entry = rounds[position.round].entries[position.column]
@@ -66,12 +120,15 @@ public struct Session: Equatable, Sendable, Codable {
 
     // MARK: - 5〜6人打ちの「4人目を指定」
 
-    /// 3人分入力済みで、まだ誰が4人目か決まっていない状態か。
-    /// ちょうど4人の局(通常の四人打ち)では常にfalseになり、タップを待たず自動で次のマスへ進む
+    /// あと1人ぶんで埋まるのに、その1人が誰か決まっていない状態か。
+    ///
+    /// 参加人数が打つ人数ちょうどなら常に false になり、タップを待たず自動で次のマスへ進む。
+    /// 参加人数の方が多いときだけ、実際に打った最後のひとりをタップで指してもらう。
     public func needsWinnerDesignation(at roundIndex: Int) -> Bool {
         let round = rounds[roundIndex]
         let playing = round.playingColumns
-        return playing.count > 4 && playing.filter { round.entries[$0].isEntered }.count == 3
+        return playing.count > playersPerRound
+            && playing.filter { round.entries[$0].isEntered }.count == playersPerRound - 1
     }
 
     /// そのマスをタップして「実際に打った4人目」に指定できるか
@@ -80,7 +137,7 @@ public struct Session: Equatable, Sendable, Codable {
             && needsWinnerDesignation(at: position.round)
     }
 
-    /// 実際に打った4人目として確定し、残りの未入力メンバーはその局だけお休みにする。
+    /// 実際に打った最後のひとりとして確定し、残りの未入力メンバーはその局だけお休みにする。
     /// 点数は3人分から逆算されるので、数字の入力は要らない
     public mutating func designateWinner(at position: Position) {
         for column in rounds[position.round].entries.indices where column != position.column {
