@@ -70,6 +70,8 @@ struct HistoryView: View {
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
                         prompt: "名前・メモ・日付で探す")
             .listStyle(.insetGrouped)
+            // 共有中・受け取り中なら、IDとパスワードを一番上に出す（一覧には出さない）
+            .safeAreaInset(edge: .top, spacing: 0) { shareInfo }
             .sheet(item: $editing) { record in
                 RecordEditView(record: record)
             }
@@ -85,6 +87,36 @@ struct HistoryView: View {
             } message: {
                 Text("この操作は元に戻せません。")
             }
+        }
+    }
+
+    /// 共有しているとき（受け取っているとき）の ID とパスワード。人に伝えるときに読めるよう、長押しで選べる
+    @ViewBuilder
+    private var shareInfo: some View {
+        if directory.isShared || directory.isSubscribed {
+            HStack(spacing: 10) {
+                Image(systemName: directory.isSubscribed ? "person.2.fill" : "antenna.radiowaves.left.and.right")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Palette.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(directory.isSubscribed ? "受け取り中" : "共有中")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Palette.inkDim)
+                    Text("ID \(directory.shareID) ・ パスワード \(directory.sharePassword)")
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(Palette.ink)
+                        .textSelection(.enabled)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Palette.line))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("shareInfo")
         }
     }
 

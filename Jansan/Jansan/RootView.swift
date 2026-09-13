@@ -58,12 +58,16 @@ struct RootView: View {
         .task {
             // 「マイ記録」は必ずある状態にしてから画面を出す
             DirectoryStore.ensureDefault(in: context)
+            // 1か月たった自動バックアップの控えを消す
+            DirectoryStore.pruneAutoBackups(in: context)
             board.attach(context: context)
             await SharePublisher.publishPending(in: context)
         }
         // オフラインで保存した分は、次に前面に来たときに送る
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
+                // 何日も開きっぱなしのまま戻ってきたときも、期限切れの控えを消す
+                DirectoryStore.pruneAutoBackups(in: context)
                 Task { await SharePublisher.publishPending(in: context) }
             }
         }

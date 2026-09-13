@@ -11,6 +11,8 @@ struct DirectoryView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @AppStorage("currentDirectory") private var currentDirectoryID = Directory.defaultUID.uuidString
+    @AppStorage(Directory.allowDeletingKey) private var allowDeletingWithRecords = false
+    @State private var deleteLocked = false
 
     /// シートは1本にまとめる。1つの画面に .sheet を複数付けると、どれかが開かなくなることがある
     @State private var sheet: SheetKind?
@@ -110,7 +112,12 @@ struct DirectoryView: View {
                         if !directory.isDefault {
                             Divider()
                             Button(role: .destructive) {
-                                deleteConfirm = true
+                                // 記録が多いディレクトリは、設定でオンにしていなければ断る
+                                if DirectoryStore.isDeletionLocked(directory, in: context, allowed: allowDeletingWithRecords) {
+                                    deleteLocked = true
+                                } else {
+                                    deleteConfirm = true
+                                }
                             } label: {
                                 Label(directory.isSubscribed ? "受け取るのをやめる" : "ディレクトリを削除",
                                       systemImage: "trash")
@@ -153,6 +160,11 @@ struct DirectoryView: View {
                 Text(directory.isSubscribed
                      ? "この端末に取り込んだぶんは消えます。送り主の記録には影響しません。また同じIDとパスワードで受け取れます。"
                      : "中の記録 \(DirectoryStore.gameCount(of: directory, in: context)) 件も一緒に消えます。元に戻せません。共有中なら、公開されたものも消します。")
+            }
+            .alert("このフォルダは削除できません", isPresented: $deleteLocked) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(DirectoryStore.deletionLockedMessage(directory, in: context))
             }
             .alert("受け取れませんでした", isPresented: .constant(refreshError != nil)) {
                 Button("OK", role: .cancel) { refreshError = nil }

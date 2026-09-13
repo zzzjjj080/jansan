@@ -18,6 +18,7 @@ struct SettingsView: View {
     @State private var showBackup = false
     @State private var eraseConfirm = false
     @State private var eraseDone = false
+    @AppStorage(Directory.allowDeletingKey) private var allowDeletingWithRecords = false
 
     var body: some View {
         NavigationStack {
@@ -243,6 +244,8 @@ struct SettingsView: View {
     /// 言っている以上、利用者が自分で消せる導線は用意しておく
     private var eraseSection: some View {
         Section {
+            Toggle("記録が\(Directory.protectedRecordCount)件以上あるフォルダも削除できる", isOn: $allowDeletingWithRecords)
+                .accessibilityIdentifier("allowDeletingDirectories")
             Button(role: .destructive) {
                 eraseConfirm = true
             } label: {
@@ -252,7 +255,7 @@ struct SettingsView: View {
         } header: {
             Text("データ")
         } footer: {
-            Text("記録・入力中の表・名簿をこの端末から完全に消します。元に戻せません。")
+            Text("・ふだんは、記録が\(Directory.protectedRecordCount - 1)件までのフォルダしか削除できません。記録の多いフォルダを消すときだけオンにしてください\n・「すべてのデータを削除」は、記録・入力中の表・名簿をこの端末から完全に消します。元に戻せません")
         }
     }
 

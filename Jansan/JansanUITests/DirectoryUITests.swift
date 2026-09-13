@@ -80,6 +80,19 @@ final class DirectoryUITests: XCTestCase {
         add(shot)
     }
 
+    /// 記録の一覧の行。**押しても中に入らない**（入るのは「詳細」ボタンだけ）。
+    /// 行はボタンではないので、識別子と名前で探す。見出しは「名前（件数）」
+    private func directoryRow(_ app: XCUIApplication, _ name: String) -> XCUIElement {
+        app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'directory-' AND label BEGINSWITH %@", name))
+            .firstMatch
+    }
+
+    /// 一覧の「詳細」ボタン。ディレクトリの中に入る唯一の入口
+    private func detailButton(_ app: XCUIApplication, _ name: String) -> XCUIElement {
+        app.buttons["「\(name)」の記録を開く"]
+    }
+
     /// 一覧の行を画面に出す。行に「詳細」「集計」が付いて縦に大きくなり、行が画面の外に出やすくなった。
     /// 一覧は画面に出ている行しか要素にしないので、上へ送り、それでも無ければ下へ戻して探す
     @discardableResult
@@ -125,7 +138,7 @@ final class DirectoryUITests: XCTestCase {
 
         // 行に「詳細」「集計」のボタンが付いて縦に大きくなり、作った行（一覧の最後）が画面の下に
         // 隠れるようになった。一覧は画面に出ている行しか要素にしないので、出てくるまで送る
-        reveal(app, app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch)
+        reveal(app, directoryRow(app, name))
     }
 
     /// メニューから「ここを保存先にする」を押し、効いたことを確かめる。
@@ -158,8 +171,7 @@ final class DirectoryUITests: XCTestCase {
         XCTAssertTrue(app.segmentedControls.firstMatch.buttons["入力"].isSelected, "「入力」が選ばれていない")
 
         openRecordsTab(app)
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'"))
-                        .firstMatch.waitForExistence(timeout: 10), "「マイ記録」が無い")
+        XCTAssertTrue(directoryRow(app, "マイ記録").waitForExistence(timeout: 10), "「マイ記録」が無い")
         attach(app, "記録タブ")
     }
 
@@ -170,10 +182,10 @@ final class DirectoryUITests: XCTestCase {
         openRecordsTab(app)
         createDirectory(app, named: name)
 
-        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        let row = directoryRow(app, name)
         reveal(app, row)
         XCTAssertTrue(row.waitForExistence(timeout: 10), "作ったディレクトリが一覧に出ない")
-        row.tap()
+        detailButton(app, name).tap()
         XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 10))
 
         // 保存先にする。メニューの項目は稀にタップが抜けるので、効いたかを見て1回だけやり直す
@@ -198,10 +210,13 @@ final class DirectoryUITests: XCTestCase {
         // そのディレクトリに1件入っている
         openRecordsTab(app)
         // 固有名のディレクトリなので、ちょうど1件になっているはず
-        let updated = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS '1 件'", name)).firstMatch
+        let updated = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'directory-' AND label BEGINSWITH %@ AND label CONTAINS '（1）'", name)).firstMatch
+        // 作ったディレクトリは自分の記録の枠の末尾。画面の外にあると一覧が読み込んでいない
+        _ = updated.waitForExistence(timeout: 3)
+        reveal(app, updated)
         if !updated.waitForExistence(timeout: 10) {
             attach(app, "NG-件数が合わない")
-            let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'directory-'")).allElementsBoundByIndex
+            let rows = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'directory-'")).allElementsBoundByIndex
             let d = XCTAttachment(string: rows.map(\.label).joined(separator: "\n") + "\n---\n" + app.debugDescription)
             d.name = "NG-一覧の行"; d.lifetime = .keepAlways; add(d)
             XCTFail("保存した記録がディレクトリに入っていない。行: \(rows.map(\.label))")
@@ -219,7 +234,7 @@ final class DirectoryUITests: XCTestCase {
         openRecordsTab(app)
         createDirectory(app, named: name)
 
-        let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
+        let mine = directoryRow(app, "マイ記録")
         // 作ったディレクトリまで送ったので、一番上の「マイ記録」は画面の外にあることがある
         reveal(app, mine)
         XCTAssertTrue(mine.waitForExistence(timeout: 10), "「マイ記録」が無い")
@@ -244,10 +259,10 @@ final class DirectoryUITests: XCTestCase {
         // データは残り、一覧の数が食い違ったまま次の画面へ進んで落ちていた
         XCTAssertTrue(mine.exists && mine.isHittable, "削除を断ったのに「マイ記録」の行が一覧から消えた")
 
-        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        let row = directoryRow(app, name)
         reveal(app, row)
         XCTAssertTrue(row.waitForExistence(timeout: 10), "作ったディレクトリが一覧に出ない")
-        row.tap()
+        detailButton(app, name).tap()
         XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 10), "作ったディレクトリが開かない（落ちた）")
         XCTAssertEqual(app.state, .runningForeground, "アプリが落ちた")
 
@@ -256,6 +271,80 @@ final class DirectoryUITests: XCTestCase {
         XCTAssertTrue(atDirectoryList(app), "一覧に戻れない")
         reveal(app, mine)
         XCTAssertTrue(mine.waitForExistence(timeout: 10), "「マイ記録」が消えた")
+    }
+
+    /// 記録が2件以上あるディレクトリは、設定でオンにしない限り削除できないこと
+    func testDirectoryWithRecordsCannotBeDeletedByDefault() {
+        let app = launchApp()
+        let name = uniqueName("守")
+        openRecordsTab(app)
+        createDirectory(app, named: name)
+
+        // CSV で表を2つ入れて、記録を2件にする
+        let row = directoryRow(app, name)
+        reveal(app, row)
+        detailButton(app, name).tap()
+        XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 10), "ディレクトリに入れない")
+        app.buttons["directoryMenu"].tap()
+        let importItem = app.buttons["importCSV"]
+        XCTAssertTrue(importItem.waitForExistence(timeout: 5), "CSVの取り込みが無い")
+        importItem.tap()
+        let field = app.textViews["csvPasteField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10), "貼り付け欄が無い")
+        field.tap()
+        field.typeText("No,東,南,西,北\n1,30,10,-10,-30\n\nNo,東,南,西\n1,15,-5,-10\n")
+        app.buttons["previewCSV"].tap()
+        let commit = app.buttons["commitCSV"]
+        XCTAssertTrue(commit.waitForExistence(timeout: 10), "取り込む内容が出ない")
+        XCTAssertTrue(scrollTo(app, commit), "取り込むボタンに届かない")
+        commit.tap()
+        let done = app.alerts["取り込みました"]
+        XCTAssertTrue(done.waitForExistence(timeout: 10), "取り込みの完了が出ない")
+        done.buttons["OK"].tap()
+
+        // 中のメニューから削除しようとすると断られる
+        app.buttons["directoryMenu"].tap()
+        app.buttons["deleteDirectory"].tap()
+        let locked = app.alerts["このフォルダは削除できません"]
+        XCTAssertTrue(locked.waitForExistence(timeout: 10), "記録が2件あるのに削除に進めてしまう")
+        attach(app, "削除できないフォルダ")
+        locked.buttons["OK"].tap()
+        XCTAssertTrue(app.navigationBars[name].exists, "断ったのにディレクトリが消えた")
+
+        // 設定でオンにする
+        app.navigationBars[name].buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(atDirectoryList(app), "一覧に戻れない")
+        app.segmentedControls.firstMatch.buttons["入力"].tap()
+        setAllowDeleting(app, true)
+
+        // 一覧のスワイプから削除できる
+        openRecordsTab(app)
+        reveal(app, row)
+        row.swipeLeft()
+        let delete = app.buttons["Delete"].exists ? app.buttons["Delete"] : app.buttons["削除"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 5), "スワイプで削除が出ない")
+        delete.tap()
+        let confirm = app.alerts.firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10), "削除の確認が出ない")
+        confirm.buttons["削除する"].tap()
+        XCTAssertFalse(row.waitForExistence(timeout: 5), "オンにしても消えない")
+
+        // 後片付け：設定を元に戻す
+        app.segmentedControls.firstMatch.buttons["入力"].tap()
+        setAllowDeleting(app, false)
+    }
+
+    /// 設定の「記録が2件以上あるフォルダも削除できる」を切り替える
+    private func setAllowDeleting(_ app: XCUIApplication, _ on: Bool) {
+        openSettings(app)
+        let toggle = app.switches["allowDeletingDirectories"]
+        XCTAssertTrue(scrollTo(app, toggle), "削除を許す切り替えが無い")
+        if (toggle.value as? String == "1") != on {
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        }
+        XCTAssertEqual(toggle.value as? String, on ? "1" : "0", "切り替わらない")
+        app.navigationBars["設定"].buttons.element(boundBy: 0).tap()
+        XCTAssertFalse(app.navigationBars["設定"].waitForExistence(timeout: 3), "設定が閉じない")
     }
 
     /// 記録の一覧から、ディレクトリの中に入らずに集計を開けること
@@ -291,10 +380,10 @@ final class DirectoryUITests: XCTestCase {
         openRecordsTab(app)
         createDirectory(app, named: name)
 
-        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        let row = directoryRow(app, name)
         reveal(app, row)
         XCTAssertTrue(row.waitForExistence(timeout: 10), "作ったディレクトリが一覧に出ない")
-        row.tap()
+        detailButton(app, name).tap()
         XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 10))
 
         // 長い名前の表を CSV で入れる
@@ -339,10 +428,10 @@ final class DirectoryUITests: XCTestCase {
         openRecordsTab(app)
         createDirectory(app, named: name)
 
-        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        let row = directoryRow(app, name)
         reveal(app, row)
         XCTAssertTrue(row.waitForExistence(timeout: 10), "作ったディレクトリが一覧に出ない")
-        row.tap()
+        detailButton(app, name).tap()
         XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 10))
 
         app.buttons["directoryMenu"].tap()
@@ -413,7 +502,7 @@ final class DirectoryUITests: XCTestCase {
         openRecordsTab(app)
         let name = uniqueName("共有")
         createDirectory(app, named: name)
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch.tap()
+        detailButton(app, name).tap()
 
         app.buttons["directoryMenu"].tap()
         app.buttons["shareSettings"].tap()
@@ -464,7 +553,7 @@ final class DirectoryUITests: XCTestCase {
         openRecordsTab(app)
         let name = uniqueName("消")
         createDirectory(app, named: name)
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch.tap()
+        detailButton(app, name).tap()
         makeCurrentDirectory(app)
 
         app.buttons["directoryMenu"].tap()
@@ -473,7 +562,7 @@ final class DirectoryUITests: XCTestCase {
         app.alerts.buttons["削除する"].tap()
 
         XCTAssertTrue(atDirectoryList(app, timeout: 10), "一覧に戻らない")
-        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch.exists, "消えていない")
+        XCTAssertFalse(directoryRow(app, name).exists, "消えていない")
 
         app.segmentedControls.firstMatch.buttons["入力"].tap()
         XCTAssertTrue(app.buttons.containing(NSPredicate(format: "label CONTAINS '保存先: マイ記録'"))
@@ -500,9 +589,9 @@ extension DirectoryUITests {
         tapSave(app)
 
         openRecordsTab(app)
-        let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
+        let mine = directoryRow(app, "マイ記録")
         XCTAssertTrue(mine.waitForExistence(timeout: 10))
-        mine.tap()
+        detailButton(app, "マイ記録").tap()
 
         let row = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[0-9]+局.*'")).firstMatch
         if !row.waitForExistence(timeout: 10) {
@@ -544,7 +633,7 @@ extension DirectoryUITests {
 
         // いまの件数を控えておく
         openRecordsTab(app)
-        let before = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
+        let before = directoryRow(app, "マイ記録")
         XCTAssertTrue(before.waitForExistence(timeout: 10))
         let labelBefore = before.label
         app.segmentedControls.firstMatch.buttons["入力"].tap()
@@ -563,7 +652,7 @@ extension DirectoryUITests {
         // やめれば増えない。**前のテストが残した件数があるので、増減で見る**
         alert.buttons["やめる"].tap()
         openRecordsTab(app)
-        let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
+        let mine = directoryRow(app, "マイ記録")
         XCTAssertTrue(mine.waitForExistence(timeout: 10))
         XCTAssertEqual(mine.label, labelBefore, "やめたのに保存されている: \(mine.label)")
     }
@@ -601,7 +690,7 @@ extension DirectoryUITests {
         openRecordsTab(app)
         createDirectory(app, named: name)
 
-        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        let row = directoryRow(app, name)
         reveal(app, row)
         XCTAssertTrue(row.waitForExistence(timeout: 10), "作った行が無い")
         row.swipeLeft()
@@ -659,16 +748,63 @@ extension DirectoryUITests {
 
         // 控えが「自動バックアップ」に入っている
         openRecordsTab(app)
-        let backup = app.buttons.matching(
-            NSPredicate(format: "label BEGINSWITH '自動バックアップ'")).firstMatch
+        let backup = directoryRow(app, "自動バックアップ")
+        // 自動バックアップは一覧のいちばん下の枠。画面の外にあることが多い
+        reveal(app, backup)
         XCTAssertTrue(backup.waitForExistence(timeout: 10), "自動バックアップが作られていない")
         // 自動バックアップは控えの置き場なので、集計のボタンは出さない
         XCTAssertFalse(app.buttons["openStats-00000000-0000-0000-0000-00000000A002"].exists,
                        "自動バックアップに集計ボタンが出ている")
         XCTAssertTrue(app.buttons["openDirectory-00000000-0000-0000-0000-00000000A002"].exists,
                       "自動バックアップに詳細ボタンが無い")
-        XCTAssertFalse(backup.label.contains("0 件"), "控えが入っていない: \(backup.label)")
+        XCTAssertFalse(backup.label.contains("（0）"), "控えが入っていない: \(backup.label)")
+        XCTAssertTrue(app.buttons["openDirectory-00000000-0000-0000-0000-00000000A002"].isEnabled,
+                      "控えがあるのに押せない")
         attach(app, "自動バックアップ")
+    }
+
+    /// 自動バックアップは**共有されたものより下**に置き、**1か月たった控えは消える**こと。
+    /// 全部消えて0件になったら、行は残して灰色にし、押せなくする
+    func testAutoBackupExpiresAfterAMonthAndGraysOut() {
+        var app = launchApp()
+        useDefaultDirectory(app)
+        XCTAssertTrue(app.buttons["cell-0-0"].waitForExistence(timeout: 20))
+        app.buttons["cell-0-0"].tap()
+        for key in ["3", "3"] { app.buttons[key].firstMatch.tap() }
+        app.buttons["確定"].tap()
+        app.buttons["newSession"].tap()
+        XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: 10))
+        app.alerts.firstMatch.buttons["始める"].tap()
+
+        // 控えは自分の記録の枠より下にある
+        openRecordsTab(app)
+        let backupID = "directory-00000000-0000-0000-0000-00000000A002"
+        let mineID = "directory-00000000-0000-0000-0000-00000000A001"
+        let backup = app.descendants(matching: .any)[backupID]
+        reveal(app, backup)
+        XCTAssertTrue(backup.waitForExistence(timeout: 10), "自動バックアップが作られていない")
+        XCTAssertFalse(backup.label.contains("（0）"), "控えが入っていない: \(backup.label)")
+        attach(app, "控えがある自動バックアップ")
+        app.terminate()
+
+        // 40日後として開き直すと、控えは消えて0件、灰色で押せない
+        app = XCUIApplication()
+        app.launchArguments = ["-didShowHowTo", "YES", "-autoBackupClockOffsetDays", "40"]
+        app.launch()
+        openRecordsTab(app)
+        let expired = app.descendants(matching: .any)[backupID]
+        reveal(app, expired)
+        XCTAssertTrue(expired.waitForExistence(timeout: 10), "0件になったら行ごと消えてしまった")
+        XCTAssertTrue(expired.label.contains("（0）"), "期限切れの控えが残っている: \(expired.label)")
+        let detail = app.buttons["openDirectory-00000000-0000-0000-0000-00000000A002"]
+        XCTAssertTrue(detail.exists)
+        XCTAssertFalse(detail.isEnabled, "空になった自動バックアップが押せる")
+        // 並びは「マイ記録」より下
+        let mine = app.descendants(matching: .any)[mineID]
+        if mine.exists && expired.exists {
+            XCTAssertGreaterThan(expired.frame.minY, mine.frame.minY, "自動バックアップが自分の記録より上にある")
+        }
+        attach(app, "期限切れで空になった自動バックアップ")
     }
 
     /// 自動バックアップは保存先には選べないこと。仕組みが入れる場所なので
@@ -712,9 +848,9 @@ extension DirectoryUITests {
 
         // 保存した記録には佐々木が残っている
         openRecordsTab(app)
-        let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
+        let mine = directoryRow(app, "マイ記録")
         XCTAssertTrue(mine.waitForExistence(timeout: 10))
-        mine.tap()
+        detailButton(app, "マイ記録").tap()
         let record = app.buttons.matching(NSPredicate(format: "label CONTAINS '佐々木'")).firstMatch
         XCTAssertTrue(record.waitForExistence(timeout: 10),
                       "メンバーを消したら保存済みの記録からも消えている")

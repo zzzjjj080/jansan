@@ -19,8 +19,17 @@ final class Directory {
     /// 押し間違えても戻せるようにするためのもので、保存先には選べない
     static let autoBackupUID = UUID(uuidString: "00000000-0000-0000-0000-00000000A002")!
     static let autoBackupName = "自動バックアップ"
-    /// 控えは溜め続けない。古いものから捨てる
+    /// 控えは溜め続けない。**記録されてから1か月たったものは消す**（`AutoBackupRetention`）。
+    /// 1か月以内でも、この件数を超えたら古いものから捨てる
     static let autoBackupLimit = 30
+    /// テスト用：控えの期限を判定するときの「いま」を何日ずらすか（Debug ビルドだけ読む）
+    static let autoBackupClockOffsetKey = "autoBackupClockOffsetDays"
+
+    /// **記録がこの件数以上ある自分のディレクトリは、既定では削除できない**（本人の指示）。
+    /// 積み上げた記録を一度に失うのは取り返しがつかないので、設定でオンにしたときだけ消せる
+    static let protectedRecordCount = 2
+    /// 設定「記録が2件以上あるフォルダも削除できる」の保存キー
+    static let allowDeletingKey = "allowDeletingDirectoriesWithRecords"
 
     var uid: UUID = UUID()
     var name: String = ""
@@ -131,6 +140,21 @@ enum DirectoryStore {
         "\(gameCount(of: directory, in: context)) 件 ・ \(directory.subtitle)"
     }
 
+    /// 削除を断るか。受け取ったディレクトリは手元の写しを消すだけ（また受け取れる）なので対象外
+    @MainActor
+    static func isDeletionLocked(_ directory: Directory, in context: ModelContext, allowed: Bool) -> Bool {
+        guard !allowed, !directory.isSubscribed else { return false }
+        return gameCount(of: directory, in: context) >= Directory.protectedRecordCount
+    }
+
+    /// 削除を断るときの説明。一覧とディレクトリの中で同じ文言にする
+    @MainActor
+    static func deletionLockedMessage(_ directory: Directory, in context: ModelContext) -> String {
+        let count = gameCount(of: directory, in: context)
+        let limit = Directory.protectedRecordCount
+        return "「\(directory.name)」には記録が\(count)件あります。うっかり消さないよう、記録が\(limit)件以上あるフォルダは削除できないようにしています。\n\n削除するときは、設定の「データ」で「記録が\(limit)件以上あるフォルダも削除できる」をオンにしてください。"
+    }
+
     @MainActor
     static func gameCount(of directory: Directory, in context: ModelContext) -> Int {
         games(of: directory, in: context).count
@@ -173,6 +197,26 @@ enum DirectoryStore {
         if kept.count > Directory.autoBackupLimit {
             for old in kept.dropFirst(Directory.autoBackupLimit) { context.delete(old) }
         }
+        try? context.save()
+        pruneAutoBackups(in: context)
+    }
+
+    /// 記録されてから1か月たった控えを消す。**起動時と、アプリが前面に戻ったときに通す。**
+    ///
+    /// 控えを取るときだけ消すと、しばらく対局しない人の控えがいつまでも残る。
+    /// 全部消えて0件になったディレクトリは残し、一覧で灰色にして押せなくする
+    @MainActor
+    static func pruneAutoBackups(in context: ModelContext, now: Date = .now) {
+        guard let directory = directory(uid: Directory.autoBackupUID, in: context) else { return }
+        var now = now
+        #if DEBUG
+        let offset = UserDefaults.standard.integer(forKey: Directory.autoBackupClockOffsetKey)
+        now = now.addingTimeInterval(TimeInterval(offset) * 86_400)
+        #endif
+        let expired = games(of: directory, in: context)
+            .filter { AutoBackupRetention.isExpired(savedAt: $0.savedAt, now: now) }
+        guard !expired.isEmpty else { return }
+        for old in expired { context.delete(old) }
         try? context.save()
     }
 

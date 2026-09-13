@@ -102,9 +102,10 @@ final class NewFeaturesUITests: XCTestCase {
     private func openMyRecords(_ app: XCUIApplication) {
         XCTAssertTrue(app.buttons["openSettings"].waitForExistence(timeout: 20), "入力画面が出ない")
         app.segmentedControls.firstMatch.buttons["記録"].tap()
-        let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
-        XCTAssertTrue(mine.waitForExistence(timeout: 10), "「マイ記録」が無い")
-        mine.tap()
+        // 中に入るのは「詳細」ボタンからだけ
+        let detail = app.buttons["「マイ記録」の記録を開く"]
+        XCTAssertTrue(detail.waitForExistence(timeout: 10), "「マイ記録」の詳細ボタンが無い")
+        detail.tap()
         XCTAssertTrue(app.navigationBars["マイ記録"].waitForExistence(timeout: 10), "マイ記録が開かない")
     }
 
