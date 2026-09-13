@@ -56,17 +56,13 @@ struct PlayerReportRankTests {
         #expect(report("D", in: Report.players(games: games)).lastRate == 1)
     }
 
-    @Test("プラス率・1局の最高と最低・ばらつき")
+    @Test("プラス率・1局の最高と最低")
     func scores() {
         let b = report("B", in: Report.players(games: games))
         #expect(b.plusRounds == 2)
         #expect(b.plusRate == 2.0 / 3.0)
         #expect(b.bestRound == 40)
         #expect(b.worstRound == -10)
-        // 10, 40, -10 の標準偏差（母集団）
-        let mean = 40.0 / 3.0
-        let expected = (([10.0, 40, -10].map { ($0 - mean) * ($0 - mean) }.reduce(0, +)) / 3).squareRoot()
-        #expect(abs((b.spread ?? 0) - expected) < 1e-9)
     }
 
     @Test("お休みの局は数えない。5人の四麻でも着順は4位まで")
@@ -91,15 +87,35 @@ struct PlayerReportRankTests {
 @Suite("詳しい成績・連続・対局単位・最近")
 struct PlayerReportSequenceTests {
 
-    @Test("連続トップは対局日の順に数える。配列の並びではない")
-    func streaksFollowDates() {
-        // 後の日の対局を先に渡す。日付順なら A は 2局目→3局目→4局目 で3連続トップ
-        let later = game(abcd, [[30, 10, -10, -30], [40, 0, -10, -30]], day: 2)
+    @Test("連続記録は1回の記録の中だけで数える。次の記録に移ると途切れる")
+    func streaksStopAtEndOfRecord() {
+        // 1日目の最後の局と2日目の最初の2局で A がトップ。記録をまたぐので3連続にはしない
         let earlier = game(abcd, [[-30, 10, -10, 30], [30, 10, -10, -30]], day: 1)
+        let later = game(abcd, [[30, 10, -10, -30], [40, 0, -10, -30]], day: 2)
+        // 配列の並びではなく対局日の順に数える。後の日を先に渡す
         let a = report("A", in: Report.players(games: [later, earlier]))
-        #expect(a.longestTopStreak == 3)
+        #expect(a.longestTopStreak == 2)
+        #expect(a.longestTopStreakDate == later.playedAt)
         #expect(a.longestLastStreak == 1)
-        #expect(a.longestNoLastStreak == 3)
+        #expect(a.longestLastStreakDate == earlier.playedAt)
+        #expect(a.longestNoLastStreak == 2)
+        #expect(a.longestNoLastStreakDate == later.playedAt)
+    }
+
+    @Test("同じ長さの連続は、先に出した日を残す")
+    func streakTieKeepsEarlierDate() {
+        let first = game(abcd, [[30, 10, -10, -30], [30, 10, -10, -30]], day: 1)
+        let second = game(abcd, [[30, 10, -10, -30], [30, 10, -10, -30]], day: 2)
+        let a = report("A", in: Report.players(games: [first, second]))
+        #expect(a.longestTopStreak == 2)
+        #expect(a.longestTopStreakDate == first.playedAt)
+    }
+
+    @Test("トップを取っていない人の連続トップは0で、日付は無い")
+    func noStreakNoDate() {
+        let d = report("D", in: Report.players(games: [game(abcd, [[30, 10, -10, -30]])]))
+        #expect(d.longestTopStreak == 0)
+        #expect(d.longestTopStreakDate == nil)
     }
 
     @Test("対局の合計で1位の回数・プラスの対局・最高と最低の対局")

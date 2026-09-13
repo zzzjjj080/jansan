@@ -68,20 +68,20 @@ final class SavedGame {
         try JSONDecoder().decode(GameSnapshot.self, from: payload)
     }
 
-    /// 端末の言語設定に関係なく日本語表記にする。アプリのUIが日本語で統一されているため
+    /// 端末の言語設定に関係なく日本語表記にする。アプリのUIが日本語で統一されているため。
+    /// **時刻は出さない。** 見たいのはいつの対局かで、保存した時刻ではない
     var dateLabel: String {
         guard !isDateUnknown else { return "日付未記入" }
         return effectivePlayedAt.formatted(
             .dateTime
                 .year().month(.twoDigits).day(.twoDigits)
-                .hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)
                 .locale(Locale(identifier: "ja_JP"))
         )
     }
 
-    /// 「4人打ち・8局」のような見出し
+    /// 「8局」のような見出し。人数は並んだ名前で分かるので書かない
     var shapeLabel: String {
-        "\(playerNames.count)人打ち・\(roundCount)局"
+        "\(roundCount)局"
     }
 
     /// 検索の対象。名前・メモ・日付をまとめて1本の文字列にしておく。

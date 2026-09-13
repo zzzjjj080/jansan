@@ -367,7 +367,7 @@ extension DirectoryUITests {
         XCTAssertTrue(mine.waitForExistence(timeout: 10))
         mine.tap()
 
-        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS '人打ち'")).firstMatch
+        let row = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[0-9]+局.*'")).firstMatch
         if !row.waitForExistence(timeout: 10) {
             attach(app, "NG-記録の行が無い")
             let d = XCTAttachment(string: app.debugDescription)

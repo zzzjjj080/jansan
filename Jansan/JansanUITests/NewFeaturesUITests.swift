@@ -117,7 +117,7 @@ final class NewFeaturesUITests: XCTestCase {
         openMyRecords(app)
 
         // 行をタップすると閲覧専用の画面が開く（入力の表は置き換わらない）
-        let firstRow = app.buttons.matching(NSPredicate(format: "label CONTAINS '人打ち'")).firstMatch
+        let firstRow = app.buttons.matching(NSPredicate(format: "label MATCHES '.*[0-9]+局.*'")).firstMatch
         XCTAssertTrue(firstRow.waitForExistence(timeout: 10), "記録の行が無い")
         firstRow.tap()
         XCTAssertTrue(app.staticTexts["保存した記録・見るだけ"].waitForExistence(timeout: 10),
@@ -180,6 +180,10 @@ final class NewFeaturesUITests: XCTestCase {
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label ENDSWITH '人打ち'")).firstMatch.exists,
                        "集計に人数の切り替えが残っている")
         XCTAssertTrue(app.staticTexts["ハイライト"].exists, "ハイライトが無い")
+        // 期間は 全期間・最近30日・今年 の3つ
+        XCTAssertTrue(app.buttons["最近30日"].exists, "「最近30日」が無い")
+        XCTAssertFalse(app.buttons["先月"].exists, "外したはずの期間が残っている")
+        XCTAssertFalse(app.staticTexts["いちばん安定"].exists, "ばらつきのハイライトが残っている")
         attach(app, "全記録のビュー")
 
         // 名前をタップすると、1人ぶんの詳しい成績と相性

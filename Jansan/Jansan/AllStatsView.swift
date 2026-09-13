@@ -30,22 +30,18 @@ struct AllStatsView: View {
     /// 画面に出す期間の選択肢。Core の StatsPeriod は custom を持つが、
     /// ここでは日付の入力欄を作らず、よく使う範囲だけに絞る
     private enum Period: String, CaseIterable, Identifiable {
-        case all, thisMonth, lastMonth, last30, thisYear
+        case all, last30, thisYear
         var id: String { rawValue }
         var label: String {
             switch self {
             case .all: "全期間"
-            case .thisMonth: "今月"
-            case .lastMonth: "先月"
-            case .last30: "30日"
+            case .last30: "最近30日"
             case .thisYear: "今年"
             }
         }
         var core: StatsPeriod {
             switch self {
             case .all: .all
-            case .thisMonth: .thisMonth
-            case .lastMonth: .lastMonth
             case .last30: .last30Days
             case .thisYear: .thisYear
             }
@@ -177,7 +173,7 @@ struct AllStatsView: View {
                     latest: latestRows(data),
                     latestHeaders: ["順位", "点数"],
                     totals: totalsRows(data),
-                    totalsHeaders: ["対局", "合計", "平着", "トップ"],
+                    totalsHeaders: ["局", "合計", "平着", "トップ"],
                     series: data.series.map { (name: $0.id, color: $0.color, points: $0.points) },
                     decimalMode: data.decimalMode
                 )
@@ -216,7 +212,7 @@ struct AllStatsView: View {
             ShareImageView.Row(
                 name: report.name,
                 color: data.color(report.name),
-                values: ["\(report.games)",
+                values: ["\(report.rounds)",
                          StatsFormat.signed(report.total, data.decimalMode),
                          StatsFormat.rank(report.averageRank),
                          StatsFormat.percent(report.topRate)],
@@ -295,6 +291,8 @@ struct AllStatsView: View {
         let id: String
         let name: String
         let value: String
+        /// 名前の下に添える一言（連続トップを出した日など）
+        let note: String?
         let color: Color
     }
 
@@ -302,9 +300,11 @@ struct AllStatsView: View {
         let reports = data.reports
         let decimal = data.decimalMode
         var items: [Highlight] = []
-        func add(_ title: String, _ report: PlayerReport?, _ value: (PlayerReport) -> String) {
+        func add(_ title: String, _ report: PlayerReport?, note: ((PlayerReport) -> String?)? = nil,
+                 _ value: (PlayerReport) -> String) {
             guard let report else { return }
-            items.append(Highlight(id: title, name: report.name, value: value(report), color: data.color(report.name)))
+            items.append(Highlight(id: title, name: report.name, value: value(report),
+                                   note: note?(report), color: data.color(report.name)))
         }
 
         add("最多トップ", reports.max { $0.count(ofRank: 1) < $1.count(ofRank: 1) }) {
@@ -313,7 +313,8 @@ struct AllStatsView: View {
         add("最高の1局", reports.max { ($0.bestRound ?? .min) < ($1.bestRound ?? .min) }) {
             StatsFormat.signed($0.bestRound ?? 0, decimal)
         }
-        add("連続トップ", reports.max { $0.longestTopStreak < $1.longestTopStreak }) {
+        add("連続トップ", reports.max { $0.longestTopStreak < $1.longestTopStreak },
+            note: { StatsFormat.day($0.longestTopStreakDate) }) {
             "\($0.longestTopStreak)連続"
         }
         add("最高の対局", reports.max { ($0.bestGame ?? .min) < ($1.bestGame ?? .min) }) {
@@ -324,8 +325,8 @@ struct AllStatsView: View {
         add("ラス回避率", regulars.max { ($0.lastAvoidRate ?? 0) < ($1.lastAvoidRate ?? 0) }) {
             StatsFormat.percent($0.lastAvoidRate)
         }
-        add("いちばん安定", regulars.filter { $0.spread != nil }.min { ($0.spread ?? 0) < ($1.spread ?? 0) }) {
-            "ばらつき " + StatsFormat.spread($0.spread, decimal)
+        add("平均着順", regulars.min { ($0.averageRank ?? .infinity) < ($1.averageRank ?? .infinity) }) {
+            StatsFormat.rank($0.averageRank)
         }
         return items
     }
@@ -339,78 +340,92 @@ struct AllStatsView: View {
         }
     }
 
+    /// 塗りつぶした枠の上の文字。人の色はどれも明るめなので、白より濃い色の方が読める
+    private static let onColorInk = Color(red: 0.06, green: 0.08, blue: 0.06)
+
+    /// **枠をその人の色で塗る。** 表やグラフと同じ色なので、誰の記録かが一目で分かる
     private func card(_ item: Highlight) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 3) {
             Text(item.id)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Palette.inkDim)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Self.onColorInk.opacity(0.72))
             Text(item.value)
-                .font(.system(size: 20, weight: .bold))
+                .font(.system(size: 26, weight: .heavy, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(Palette.ink)
+                .foregroundStyle(Self.onColorInk)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-            HStack(spacing: 5) {
-                Circle().fill(item.color).frame(width: 7, height: 7)
-                Text(item.name)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Palette.inkDim)
+            Text(item.name)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(Self.onColorInk)
+                .lineLimit(1)
+            if let note = item.note {
+                Text(note)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Self.onColorInk.opacity(0.72))
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 108, alignment: .topLeading)
         .padding(12)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Palette.line))
+        .background(item.color, in: RoundedRectangle(cornerRadius: 14))
         .accessibilityElement(children: .combine)
     }
 
     // MARK: - 成績表
 
-    private static let nameWidth: CGFloat = 78
-    private static let cellWidth: CGFloat = 50
-    private static let columns = ["対局", "局", "合計", "平均", "平着", "トップ", "連対", "ラス"]
+    private static let columns = ["局", "合計", "平均", "平着", "トップ", "連対", "ラス"]
+    private static let nameWidth: CGFloat = 74
+    private static let chevronWidth: CGFloat = 12
 
+    /// 横に送らずに1画面に収める。名前の残りの幅を列で等分する
     private func table(_ data: Computed) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            VStack(spacing: 0) {
-                HStack(spacing: 0) {
-                    Color.clear.frame(width: Self.nameWidth, height: 1)
-                    ForEach(Self.columns, id: \.self) { title in
-                        Text(title)
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(Palette.inkDim)
-                            .frame(width: Self.cellWidth)
-                    }
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                Color.clear.frame(width: Self.nameWidth, height: 1)
+                ForEach(Self.columns, id: \.self) { title in
+                    Text(title)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Palette.inkDim)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity)
                 }
-                .padding(.bottom, 6)
+                Color.clear.frame(width: Self.chevronWidth, height: 1)
+            }
+            .padding(.bottom, 8)
 
-                ForEach(data.ranked) { report in
-                    NavigationLink(value: report.name) {
-                        row(report, data)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("statsRow-\(report.name)")
+            ForEach(data.ranked) { report in
+                NavigationLink(value: report.name) {
+                    row(report, data)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("statsRow-\(report.name)")
+                if report.id != data.ranked.last?.id {
                     Divider()
                 }
             }
         }
+        .padding(12)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Palette.line))
     }
 
     private func row(_ report: PlayerReport, _ data: Computed) -> some View {
         HStack(spacing: 0) {
-            HStack(spacing: 5) {
-                Circle().fill(data.color(report.name)).frame(width: 7, height: 7)
+            HStack(spacing: 6) {
+                Circle().fill(data.color(report.name)).frame(width: 8, height: 8)
                 Text(report.name)
-                    .font(.system(size: 12.5, weight: .bold))
+                    .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
             .frame(width: Self.nameWidth, alignment: .leading)
 
-            cell("\(report.games)")
             cell("\(report.rounds)")
-            cell(StatsFormat.score(report.total, data.decimalMode), negative: report.total < 0)
+            cell(StatsFormat.signed(report.total, data.decimalMode), negative: report.total < 0)
             cell(StatsFormat.average(report.averageScore, data.decimalMode),
                  negative: (report.averageScore ?? 0) < 0)
             cell(StatsFormat.rank(report.averageRank))
@@ -421,9 +436,9 @@ struct AllStatsView: View {
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(Palette.inkDim)
-                .padding(.leading, 4)
+                .frame(width: Self.chevronWidth, alignment: .trailing)
         }
-        .padding(.vertical, 9)
+        .padding(.vertical, 12)
         .contentShape(Rectangle())
         // マス単位で読ませると数字だけが並んで意味が取れない。行ごとにまとめる
         .accessibilityElement(children: .ignore)
@@ -432,16 +447,16 @@ struct AllStatsView: View {
 
     private func cell(_ text: String, negative: Bool = false) -> some View {
         Text(text)
-            .font(.system(size: 12.5, weight: .semibold))
+            .font(.system(size: 15, weight: .semibold, design: .rounded))
             .monospacedDigit()
             .foregroundStyle(negative ? Palette.negative : Palette.ink)
             .lineLimit(1)
-            .minimumScaleFactor(0.7)
-            .frame(width: Self.cellWidth)
+            .minimumScaleFactor(0.6)
+            .frame(maxWidth: .infinity)
     }
 
     private func spoken(_ report: PlayerReport, _ data: Computed) -> String {
-        var parts = [report.name, "\(report.games)対局", "\(report.rounds)局",
+        var parts = [report.name, "\(report.rounds)局",
                      "合計 \(StatsFormat.signed(report.total, data.decimalMode))"]
         if let rank = report.averageRank { parts.append("平均着順 \(String(format: "%.2f", rank))") }
         parts.append("トップ率 \(StatsFormat.percent(report.topRate))")

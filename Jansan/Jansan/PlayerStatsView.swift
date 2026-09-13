@@ -119,11 +119,8 @@ struct PlayerStatsView: View {
             item("最高", r.bestRound.map { StatsFormat.signed($0, decimalMode) } ?? "–")
             item("最低", r.worstRound.map { StatsFormat.signed($0, decimalMode) } ?? "–",
                  negative: (r.worstRound ?? 0) < 0)
-            item("ばらつき", StatsFormat.spread(r.spread, decimalMode))
         } header: {
             Text("1局の点数")
-        } footer: {
-            Text("・ばらつきは1局の点数の標準偏差です\n・小さいほど大勝ちも大負けも少なく、安定しています")
         }
     }
 
@@ -131,13 +128,13 @@ struct PlayerStatsView: View {
 
     private func streakSection(_ r: PlayerReport) -> some View {
         Section {
-            item("連続トップ", "\(r.longestTopStreak)局")
-            item("連続ラス", "\(r.longestLastStreak)局")
-            item("ラスを引かない連続", "\(r.longestNoLastStreak)局")
+            item("連続トップ", streak(r.longestTopStreak, r.longestTopStreakDate))
+            item("連続ラス", streak(r.longestLastStreak, r.longestLastStreakDate))
+            item("ラスを引かない連続", streak(r.longestNoLastStreak, r.longestNoLastStreakDate))
         } header: {
             Text("連続記録（最長）")
         } footer: {
-            Text("対局日の順に並べて数えています。")
+            Text("・1回の記録（その日の対局）の中で数えます。次の記録に移ると途切れます\n・かっこの中は、その記録を出した日です")
         }
     }
 
@@ -221,6 +218,11 @@ struct PlayerStatsView: View {
         }
     }
 
+    private func streak(_ length: Int, _ date: Date?) -> String {
+        guard length > 0, let day = StatsFormat.day(date) else { return "\(length)局" }
+        return "\(length)局（\(day)）"
+    }
+
     private func item(_ title: String, _ value: String, negative: Bool = false) -> some View {
         LabeledContent(title) {
             Text(value)
@@ -255,9 +257,11 @@ enum StatsFormat {
         value.map { String(format: "%.2f", $0) } ?? "–"
     }
 
-    static func spread(_ value: Double?, _ decimalMode: Bool) -> String {
-        guard let value else { return "–" }
-        return "±" + ScoreFormatter.string(Int(value.rounded()), decimalMode: decimalMode)
+    /// 記録を出した日。日付未記入の記録は「日付未記入」
+    static func day(_ date: Date?) -> String? {
+        guard let date else { return nil }
+        if PlayedDate.isUnknown(date) { return "日付未記入" }
+        return date.formatted(.dateTime.year().month().day().locale(Locale(identifier: "ja_JP")))
     }
 
     static func styleLabel(_ style: Int?) -> String {

@@ -22,12 +22,15 @@ public struct PlayerReport: Equatable, Sendable, Identifiable {
     public let plusRounds: Int
     public let bestRound: Int?
     public let worstRound: Int?
-    /// 1局の点数のばらつき（標準偏差）。保持している整数の単位のまま
-    public let spread: Double?
+    /// 連続記録は**1回の記録（その日の表）の中だけで数える。** 次の記録に移ると途切れる
     public let longestTopStreak: Int
     public let longestLastStreak: Int
     /// ラスを引かずに続いた局数の最長
     public let longestNoLastStreak: Int
+    /// その最長を出した記録の対局日。1局も無ければ nil。日付未記入の記録なら `PlayedDate.unknown`
+    public let longestTopStreakDate: Date?
+    public let longestLastStreakDate: Date?
+    public let longestNoLastStreakDate: Date?
     /// 対局（表）の合計で1位だった回数
     public let gameTops: Int
     /// 対局（表）の合計がプラスだった回数
@@ -143,7 +146,7 @@ public enum Report {
         var order: [String] = []
         var tally: [String: Tally] = [:]
 
-        for game in chronological(games) {
+        for (gameIndex, game) in chronological(games).enumerated() {
             let players = game.session.players
             var gameTotals: [Int: Int] = [:]
 
@@ -155,7 +158,8 @@ public enum Report {
                         order.append(name)
                         tally[name] = Tally()
                     }
-                    tally[name]!.addRound(rank: index + 1, seats: ranked.count, value: item.value)
+                    tally[name]!.addRound(rank: index + 1, seats: ranked.count, value: item.value,
+                                          game: gameIndex, date: game.playedAt)
                     gameTotals[item.column, default: 0] += item.value
                 }
             }
@@ -208,14 +212,24 @@ private struct Tally {
     var rankCounts: [Int] = []
     var lastCount = 0, plusRounds = 0
     var best: Int?, worst: Int?
-    var sum = 0.0, sumOfSquares = 0.0
     var topStreak = 0, lastStreak = 0, noLastStreak = 0
     var longestTop = 0, longestLast = 0, longestNoLast = 0
+    var topDate: Date?, lastDate: Date?, noLastDate: Date?
+    /// いま数えている記録。変わったら連続記録を数え直す
+    var currentGame = -1
     var gameTops = 0, plusGames = 0
     var bestGame: Int?, worstGame: Int?
     var history: [(rank: Int, value: Int)] = []
 
-    mutating func addRound(rank: Int, seats: Int, value: Int) {
+    mutating func addRound(rank: Int, seats: Int, value: Int, game: Int, date: Date) {
+        // 連続記録は1回の記録の中だけ。日をまたいで「連続」とは呼ばない
+        if game != currentGame {
+            topStreak = 0
+            lastStreak = 0
+            noLastStreak = 0
+            currentGame = game
+        }
+
         rounds += 1
         total += value
         if rankCounts.count < rank {
@@ -229,15 +243,14 @@ private struct Tally {
         if value > 0 { plusRounds += 1 }
         best = Swift.max(best ?? value, value)
         worst = Swift.min(worst ?? value, value)
-        sum += Double(value)
-        sumOfSquares += Double(value) * Double(value)
 
         topStreak = rank == 1 ? topStreak + 1 : 0
         lastStreak = isLast ? lastStreak + 1 : 0
         noLastStreak = isLast ? 0 : noLastStreak + 1
-        longestTop = Swift.max(longestTop, topStreak)
-        longestLast = Swift.max(longestLast, lastStreak)
-        longestNoLast = Swift.max(longestNoLast, noLastStreak)
+        // 同じ長さなら先に出した方を残す
+        if topStreak > longestTop { longestTop = topStreak; topDate = date }
+        if lastStreak > longestLast { longestLast = lastStreak; lastDate = date }
+        if noLastStreak > longestNoLast { longestNoLast = noLastStreak; noLastDate = date }
 
         history.append((rank: rank, value: value))
     }
@@ -251,11 +264,6 @@ private struct Tally {
     }
 
     func report(name: String) -> PlayerReport {
-        var spread: Double?
-        if rounds >= 2 {
-            let mean = sum / Double(rounds)
-            spread = (Swift.max(0, sumOfSquares / Double(rounds) - mean * mean)).squareRoot()
-        }
         let recentSlice = history.suffix(Report.recentRounds)
         let recent = recentSlice.isEmpty ? nil : PlayerReport.RecentForm(
             rounds: recentSlice.count,
@@ -265,9 +273,11 @@ private struct Tally {
         return PlayerReport(
             name: name, games: games, rounds: rounds, total: total,
             rankCounts: rankCounts, lastCount: lastCount, plusRounds: plusRounds,
-            bestRound: best, worstRound: worst, spread: spread,
+            bestRound: best, worstRound: worst,
             longestTopStreak: longestTop, longestLastStreak: longestLast,
             longestNoLastStreak: longestNoLast,
+            longestTopStreakDate: topDate, longestLastStreakDate: lastDate,
+            longestNoLastStreakDate: noLastDate,
             gameTops: gameTops, plusGames: plusGames, bestGame: bestGame, worstGame: worstGame,
             recent: recent
         )
