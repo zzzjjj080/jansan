@@ -345,7 +345,9 @@ struct AllStatsView: View {
         }
         let regulars = reports.filter { $0.rounds >= Self.minimumRounds }
         if let r = regulars.max(by: { ($0.lastAvoidRate ?? 0) < ($1.lastAvoidRate ?? 0) }) {
-            add("ラス回避率", "checkmark.shield.fill", r.name, StatsFormat.percent(r.lastAvoidRate))
+            // 率だけだと何回中なのか分からない。分母（打った局数）と、ラスになった回数を添える
+            add("ラス回避率", "checkmark.shield.fill", r.name, StatsFormat.percent(r.lastAvoidRate),
+                note: "\(r.rounds)局中 ラス\(r.lastCount)回")
         }
         if let r = regulars.min(by: { ($0.averageRank ?? .infinity) < ($1.averageRank ?? .infinity) }) {
             add("平均着順", "medal.fill", accent: "star.fill", r.name, StatsFormat.rank(r.averageRank))
@@ -713,11 +715,12 @@ private extension Array where Element: Hashable {
 
 // MARK: - ハイライトの枠
 
-/// ハイライト1枠。**暗い地に、その人の色の四隅の金具。項目ならではの絵を大きく透かす。**
+/// ハイライト1枠。**暗い地に、その人の色で光る四角の枠。項目ならではの絵を大きく透かす。**
 ///
-/// 試作を2回見比べて本人が選んだ形（2026-09-13。2回目の④「コーナー金具」）。
+/// 試作を2回見比べて本人が選んだ形（2026-09-13。2回目の④「コーナー金具」）を元に、
+/// 四隅だけだった枠を**切れ目のない四角**にした（本人の指示）。
 /// 好評だった点：枠がある・派手に光る・項目ごとの絵がある。
-/// 地はライトモードでも暗いまま。明るい地だと金具が光って見えない
+/// 地はライトモードでも暗いまま。明るい地だと枠が光って見えない
 private struct HighlightCard: View {
     let title: String
     let symbol: String
@@ -733,12 +736,14 @@ private struct HighlightCard: View {
     static let night = Color(red: 0.05, green: 0.06, blue: 0.07)
 
     var body: some View {
-        VStack(spacing: 4) {
+        // 見出しと名前は、真ん中の数字（26pt）より少し小さいくらいまで大きくする（本人の指示）。
+        // 見出しは「ラス回避率」など5文字あるので、枠からはみ出す手前で字を縮める
+        VStack(spacing: 3) {
             Text(title)
-                .font(.system(size: 11, weight: .heavy))
+                .font(.system(size: 17, weight: .heavy))
                 .foregroundStyle(color)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.55)
             Text(value)
                 .font(.system(size: 26, weight: .black))
                 .monospacedDigit()
@@ -746,10 +751,10 @@ private struct HighlightCard: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
             Text(name)
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(color)
                 .lineLimit(1)
-                .minimumScaleFactor(0.6)
+                .minimumScaleFactor(0.5)
             // 日付の無い枠も同じ段組みにして、値と名前の位置をそろえる
             Text(note ?? "–")
                 .font(.system(size: 9.5, weight: .semibold))
@@ -759,7 +764,8 @@ private struct HighlightCard: View {
                 .opacity(note == nil ? 0 : 1)
                 .accessibilityHidden(note == nil)
         }
-        .padding(.horizontal, 10)
+        // 横の余白を詰めて、大きくした見出しと名前に幅を回す
+        .padding(.horizontal, 6)
         .frame(maxWidth: .infinity)
         .frame(height: Self.height)
         .background {
@@ -767,13 +773,9 @@ private struct HighlightCard: View {
                 Self.night
                 Illustration(symbol: symbol, accent: accent, size: 60, color: color.opacity(0.16))
             }
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
-        .overlay(
-            CornerBrackets(length: 18)
-                .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                .padding(2)
-        )
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(color, lineWidth: 2.5))
         .shadow(color: color.opacity(0.5), radius: 6)
         // 読み上げは見出しから始める（絵は読ませない。UIテストもこの順で探す）
         .accessibilityElement(children: .combine)
@@ -802,24 +804,3 @@ private struct Illustration: View {
     }
 }
 
-/// 四隅だけの枠（カメラのファインダーのような金具）
-private struct CornerBrackets: Shape {
-    var length: CGFloat = 16
-
-    func path(in r: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: r.minX, y: r.minY + length))
-        p.addLine(to: CGPoint(x: r.minX, y: r.minY))
-        p.addLine(to: CGPoint(x: r.minX + length, y: r.minY))
-        p.move(to: CGPoint(x: r.maxX - length, y: r.minY))
-        p.addLine(to: CGPoint(x: r.maxX, y: r.minY))
-        p.addLine(to: CGPoint(x: r.maxX, y: r.minY + length))
-        p.move(to: CGPoint(x: r.maxX, y: r.maxY - length))
-        p.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
-        p.addLine(to: CGPoint(x: r.maxX - length, y: r.maxY))
-        p.move(to: CGPoint(x: r.minX + length, y: r.maxY))
-        p.addLine(to: CGPoint(x: r.minX, y: r.maxY))
-        p.addLine(to: CGPoint(x: r.minX, y: r.maxY - length))
-        return p
-    }
-}

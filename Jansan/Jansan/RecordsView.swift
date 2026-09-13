@@ -17,7 +17,20 @@ struct RecordsView: View {
     @AppStorage("currentDirectory") private var currentDirectoryID = Directory.defaultUID.uuidString
 
     @State private var showNew = false
-    @State private var showSubscribe = false
+    /// シートは1本にまとめる。1つの画面に .sheet を複数付けると、どれかが開かなくなることがある
+    @State private var sheet: RecordsSheet?
+
+    private enum RecordsSheet: Identifiable {
+        case subscribe
+        case stats(UUID)
+
+        var id: String {
+            switch self {
+            case .subscribe: "subscribe"
+            case .stats(let uid): "stats-\(uid.uuidString)"
+            }
+        }
+    }
     @State private var newName = ""
     @State private var pendingDelete: Directory?
 
@@ -32,8 +45,11 @@ struct RecordsView: View {
             List {
                 Section {
                     ForEach(mine) { dir in
-                        NavigationLink(value: dir.uid) { row(dir, tint: Palette.accent) }
-                            .accessibilityIdentifier("directory-\(dir.uid.uuidString)")
+                        HStack(spacing: 8) {
+                            NavigationLink(value: dir.uid) { row(dir, tint: Palette.accent) }
+                                .accessibilityIdentifier("directory-\(dir.uid.uuidString)")
+                            statsButton(dir, tint: Palette.accent)
+                        }
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 // 「マイ記録」は消せない。中の記録の行き先が無くなるので、削除の操作ごと出さない
                                 if !dir.isDefault { deleteAction(dir) }
@@ -48,8 +64,11 @@ struct RecordsView: View {
                 if !received.isEmpty {
                     Section {
                         ForEach(received) { dir in
-                            NavigationLink(value: dir.uid) { row(dir, tint: receivedTint) }
-                                .accessibilityIdentifier("directory-\(dir.uid.uuidString)")
+                            HStack(spacing: 8) {
+                                NavigationLink(value: dir.uid) { row(dir, tint: receivedTint) }
+                                    .accessibilityIdentifier("directory-\(dir.uid.uuidString)")
+                                statsButton(dir, tint: receivedTint)
+                            }
                                 .listRowBackground(receivedTint.opacity(0.10))
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     deleteAction(dir)
@@ -83,7 +102,7 @@ struct RecordsView: View {
                         }
                         .accessibilityIdentifier("newDirectory")
                         Button {
-                            showSubscribe = true
+                            sheet = .subscribe
                         } label: {
                             Label("IDで受け取る", systemImage: "square.and.arrow.down")
                         }
@@ -109,8 +128,15 @@ struct RecordsView: View {
             } message: {
                 Text(deleteMessage)
             }
-            .sheet(isPresented: $showSubscribe) {
-                SubscribeView()
+            .sheet(item: $sheet) { kind in
+                switch kind {
+                case .subscribe:
+                    SubscribeView()
+                case .stats(let uid):
+                    if let dir = directories.first(where: { $0.uid == uid }) {
+                        AllStatsView(directory: dir)
+                    }
+                }
             }
             // 一覧を開いたら、受け取っているものを静かに取り直す。
             // 件数が古いままだと「更新されない」と見える
@@ -136,6 +162,25 @@ struct RecordsView: View {
             Label("削除", systemImage: "trash")
         }
         .tint(Palette.negative)
+    }
+
+    /// **中に入らずに、そのディレクトリの集計を開く。** 以前は中に入ってから右上の集計を押す必要があった。
+    /// 行の中（NavigationLink の中）に置くと行のタップと区別できないので、行の外に並べて borderless にする
+    private func statsButton(_ dir: Directory, tint: Color) -> some View {
+        Button {
+            sheet = .stats(dir.uid)
+        } label: {
+            Label("集計", systemImage: "chart.line.uptrend.xyaxis")
+                .labelStyle(.titleAndIcon)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(tint)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(tint.opacity(0.14), in: Capsule())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel("「\(dir.name)」の集計を開く")
+        .accessibilityIdentifier("openStats-\(dir.uid.uuidString)")
     }
 
     private func row(_ dir: Directory, tint: Color) -> some View {

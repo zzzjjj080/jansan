@@ -76,7 +76,7 @@ struct PlayerStatsView: View {
             item("トップ率", StatsFormat.percent(r.topRate))
             item("連対率（1〜2位）", StatsFormat.percent(r.rentaiRate))
             item("ラス率", StatsFormat.percent(r.lastRate))
-            item("ラス回避率", StatsFormat.percent(r.lastAvoidRate))
+            item("ラス回避率", "\(StatsFormat.percent(r.lastAvoidRate))（\(r.rounds)局中 ラス\(r.lastCount)回）")
         } header: {
             Text("着順")
         } footer: {

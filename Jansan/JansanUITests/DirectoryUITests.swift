@@ -239,6 +239,22 @@ final class DirectoryUITests: XCTestCase {
         XCTAssertTrue(mine.waitForExistence(timeout: 10), "「マイ記録」が消えた")
     }
 
+    /// 記録の一覧から、ディレクトリの中に入らずに集計を開けること
+    func testOpenStatsFromDirectoryList() {
+        let app = launchApp()
+        openRecordsTab(app)
+
+        // マイ記録の uid は固定（Directory.defaultUID）
+        let button = app.buttons["openStats-00000000-0000-0000-0000-00000000A001"]
+        XCTAssertTrue(button.waitForExistence(timeout: 10), "一覧にマイ記録の集計ボタンが無い")
+        button.tap()
+
+        let stats = app.navigationBars.matching(NSPredicate(format: "identifier CONTAINS 'の集計'")).firstMatch
+        XCTAssertTrue(stats.waitForExistence(timeout: 15), "一覧から集計が開かない")
+        XCTAssertFalse(app.navigationBars["マイ記録"].exists, "集計ではなくディレクトリの中に入った")
+        attach(app, "一覧から集計")
+    }
+
     /// 名前が長くても、集計の画面が横にはみ出さないこと。
     /// 成績表の名前の欄を「いちばん長い名前の幅」で固定したら、表が画面より広くなり、
     /// 集計の画面ごと左右が切れた（期間の切り替えの左端が画面の外に出た）
