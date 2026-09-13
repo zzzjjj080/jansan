@@ -9,6 +9,9 @@
 
 	     置き場所は .xcodeproj と同じ階層。同期フォルダ（Jansan/Jansan/）に置くと
 	     資源としてもコピーされ、「Multiple commands produce Info.plist」で止まる。 -->
+	<!-- 実機にどのビルドが入っているかの印。install-device.sh が JS_BUILD_STAMP を渡す（引き継ぎ書 4-145） -->
+	<key>JSBuildStamp</key>
+	<string>$(JS_BUILD_STAMP)</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>

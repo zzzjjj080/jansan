@@ -31,7 +31,10 @@ final class DirectoryUITests: XCTestCase {
         let confirm = alert.buttons.matching(NSPredicate(format: "label ENDSWITH 'に残す'")).firstMatch
         XCTAssertTrue(confirm.waitForExistence(timeout: 5), "確認のボタンが無い")
         confirm.tap()
-        XCTAssertFalse(alert.waitForExistence(timeout: 3), "確認が閉じていない")
+        // 同じ記録がすでにあると、もう1回確認が出る。シミュレータには前の実行の記録が残るので、出たら通す
+        let again = app.alerts["同じ記録がすでにあります"]
+        if again.waitForExistence(timeout: 2) { again.buttons["それでも残す"].tap() }
+        XCTAssertFalse(app.alerts.firstMatch.waitForExistence(timeout: 3), "確認が閉じていない")
     }
 
     /// 設定を開く。起動直後の1回目は飲まれることがあるので、効かなければ押し直す
@@ -655,6 +658,58 @@ extension DirectoryUITests {
         let mine = directoryRow(app, "マイ記録")
         XCTAssertTrue(mine.waitForExistence(timeout: 10))
         XCTAssertEqual(mine.label, labelBefore, "やめたのに保存されている: \(mine.label)")
+    }
+
+    /// **保存先にまったく同じ記録があるときは、もう1回確認する**こと。
+    /// やめれば増えず、「それでも残す」なら増える
+    func testSavingSameRecordAsksAgain() {
+        let app = launchApp()
+        useDefaultDirectory(app)
+        // 前の実行と重ならないよう、点数は毎回変える
+        let value = String(Int.random(in: 10...89))
+        XCTAssertTrue(app.buttons["cell-0-0"].waitForExistence(timeout: 20))
+        app.buttons["cell-0-0"].tap()
+        for key in value.map(String.init) { app.buttons[key].firstMatch.tap() }
+        app.buttons["確定"].tap()
+        tapSave(app)
+
+        openRecordsTab(app)
+        let row = directoryRow(app, "マイ記録")
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        let saved = recordCount(row.label)
+        app.segmentedControls.firstMatch.buttons["入力"].tap()
+
+        // 同じ表をもう一度残そうとすると、2回目の確認が出る
+        app.buttons["saveGame"].tap()
+        let first = app.alerts.firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 10), "保存の確認が出ない")
+        first.buttons.matching(NSPredicate(format: "label ENDSWITH 'に残す'")).firstMatch.tap()
+        let again = app.alerts["同じ記録がすでにあります"]
+        XCTAssertTrue(again.waitForExistence(timeout: 5), "同じ記録があるのに、もう一度確かめない")
+        attach(app, "同じ記録の確認")
+        again.buttons["やめる"].tap()
+
+        openRecordsTab(app)
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        XCTAssertEqual(recordCount(row.label), saved, "やめたのに保存されている: \(row.label)")
+        app.segmentedControls.firstMatch.buttons["入力"].tap()
+
+        // それでも残すなら増える
+        app.buttons["saveGame"].tap()
+        XCTAssertTrue(first.waitForExistence(timeout: 10))
+        first.buttons.matching(NSPredicate(format: "label ENDSWITH 'に残す'")).firstMatch.tap()
+        XCTAssertTrue(again.waitForExistence(timeout: 5))
+        again.buttons["それでも残す"].tap()
+
+        openRecordsTab(app)
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        XCTAssertEqual(recordCount(row.label), saved + 1, "それでも残したのに増えていない: \(row.label)")
+    }
+
+    /// 一覧の見出し「名前（9）」から件数を読む
+    private func recordCount(_ label: String) -> Int {
+        guard let open = label.lastIndex(of: "（"), let close = label.lastIndex(of: "）"), open < close else { return -1 }
+        return Int(label[label.index(after: open)..<close]) ?? -1
     }
 }
 

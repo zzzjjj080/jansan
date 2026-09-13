@@ -36,6 +36,7 @@ struct SettingsView: View {
 #if DEBUG
                 debugSection
 #endif
+                buildSection
             }
             .sheet(isPresented: $showHowTo) {
                 HowToView()
@@ -302,6 +303,18 @@ struct SettingsView: View {
         eraseDone = true
     }
 
+    /// いちばん下に、入っている版を小さく出す。実機が入れ替わったかを画面で確かめるため（引き継ぎ書 4-145）
+    private var buildSection: some View {
+        Section {
+            Text(BuildInfo.label)
+                .font(.footnote.monospacedDigit())
+                .foregroundStyle(Palette.inkDim)
+                .frame(maxWidth: .infinity)
+                .listRowBackground(Color.clear)
+                .accessibilityIdentifier("buildInfo")
+        }
+    }
+
 #if DEBUG
     private var debugSection: some View {
         Section {
@@ -324,4 +337,17 @@ struct SettingsView: View {
         }
     }
 #endif
+}
+
+/// 版番号・ビルド番号と、install-device.sh が入れた印。例：`1.5 (7) · b120 09/14 01:30`
+enum BuildInfo {
+    static var label: String {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let version = info["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info["CFBundleVersion"] as? String ?? "?"
+        // Xcode から直接ビルドしたときは印が空（または展開されないまま）になる
+        let stamp = (info["JSBuildStamp"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+        guard !stamp.isEmpty, !stamp.hasPrefix("$(") else { return "\(version) (\(build))" }
+        return "\(version) (\(build)) · \(stamp)"
+    }
 }

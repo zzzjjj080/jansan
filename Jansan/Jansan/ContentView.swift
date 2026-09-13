@@ -21,6 +21,10 @@ struct ContentView: View {
 
     @State private var didSave = false
     @State private var saveConfirm = false
+    /// 保存先に**人も点数もまったく同じ記録**があるときの、2回目の確認
+    @State private var duplicateConfirm = false
+    /// その同じ記録の日付（「日付未記入」もありうる）
+    @State private var duplicateDate = ""
     @State private var newSessionConfirm = false
     @AppStorage("currentDirectory") private var currentDirectoryID = Directory.defaultUID.uuidString
     @Query private var directories: [Directory]
@@ -39,7 +43,7 @@ struct ContentView: View {
                 // alert なら iPhone では必ず中央に2つのボタンが出る
                 .alert("この対局を記録に残しますか", isPresented: $saveConfirm) {
                     Button("やめる", role: .cancel) {}
-                    Button("「\(currentDirectoryName)」に残す") { save() }
+                    Button("「\(currentDirectoryName)」に残す") { requestSave() }
                 } message: {
                     Text(saveMessage)
                 }
@@ -53,6 +57,13 @@ struct ContentView: View {
             ScoreTableView(board: board)
                 .padding(.horizontal, 10)
                 .padding(.top, 10)
+                // 1回目の確認とは別の view に付ける。同じ view で続けて出すと、2枚目が出ないことがある
+                .alert("同じ記録がすでにあります", isPresented: $duplicateConfirm) {
+                    Button("やめる", role: .cancel) {}
+                    Button("それでも残す") { save() }
+                } message: {
+                    Text("「\(currentDirectoryName)」に、人も点数もまったく同じ記録（\(duplicateDate)）がすでにあります。同じ対局を2回残していないか確かめてください。")
+                }
             if board.isKeypadVisible {
                 KeypadView(board: board)
                     .transition(.move(edge: .bottom))
@@ -253,6 +264,32 @@ struct ContentView: View {
 
     private var currentDirectoryName: String {
         directories.first { $0.uid.uuidString == currentDirectoryID }?.name ?? Directory.defaultName
+    }
+
+    /// 1回目の確認で「残す」を押したとき。**保存先にまったく同じ記録があれば、もう1回確かめる**（本人の指示）。
+    /// 保存したあと表を消さずに続けるので、うっかり2回押すと同じ対局が2件になる
+    private func requestSave() {
+        guard let same = sameRecordInTarget() else {
+            save()
+            return
+        }
+        duplicateDate = same.dateLabel
+        // 1枚目の確認が閉じきってから出す。閉じる途中で出すと飲まれる
+        Task {
+            try? await Task.sleep(for: .milliseconds(400))
+            duplicateConfirm = true
+        }
+    }
+
+    /// 保存先にある、いまの表とまったく同じ記録。比べるのは書き出し（CSV）と同じ中身＝名前の並びと全局の点数
+    private func sameRecordInTarget() -> SavedGame? {
+        let target = currentDirectory.flatMap { $0.isEditable ? $0 : nil }
+            ?? directories.first(where: \.isDefault)
+        guard let target else { return nil }
+        let mine = CSVImport.fingerprint(of: board.session)
+        return DirectoryStore.games(of: target, in: context).first { record in
+            (try? record.snapshot()).map { CSVImport.fingerprint(of: $0.session) } == mine
+        }
     }
 
     /// 保存先のディレクトリへ残す。消えてしまったディレクトリを指していたら「マイ記録」へ

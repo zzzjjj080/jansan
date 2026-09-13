@@ -56,7 +56,10 @@ final class StoreScreenshotsUITests: XCTestCase {
         let alert = app.alerts.firstMatch
         XCTAssertTrue(alert.waitForExistence(timeout: 10), "保存の確認が出ない")
         alert.buttons.matching(NSPredicate(format: "label ENDSWITH 'に残す'")).firstMatch.tap()
-        XCTAssertFalse(alert.waitForExistence(timeout: 3), "確認が閉じていない")
+        // 同じ記録がすでにあると、もう1回確認が出る。シミュレータには前の実行の記録が残るので、出たら通す
+        let again = app.alerts["同じ記録がすでにあります"]
+        if again.waitForExistence(timeout: 2) { again.buttons["それでも残す"].tap() }
+        XCTAssertFalse(app.alerts.firstMatch.waitForExistence(timeout: 3), "確認が閉じていない")
     }
 
     private func openRecordsTab(_ app: XCUIApplication) {

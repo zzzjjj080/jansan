@@ -7,6 +7,8 @@
 set -e
 cd "$(dirname "$0")"
 REMEMBER="$(pwd)/.last-device"
+# 設定画面のいちばん下に出す印。コミット数と時刻で毎回変わる（未コミットの変更があれば +）
+STAMP="b$(git rev-list --count HEAD)$(git diff --quiet HEAD -- . || echo +) $(date '+%m/%d %H:%M')"
 cd Jansan
 
 LIST=$(xcrun devicectl list devices 2>/dev/null || true)
@@ -38,11 +40,12 @@ for DEV in $CANDIDATES; do
   if xcodebuild -project Jansan.xcodeproj -scheme Jansan -configuration Debug \
       -destination "platform=iOS,id=$DEV" -destination-timeout 30 \
       -derivedDataPath /tmp/yt-device \
-      -allowProvisioningUpdates build 2>&1 | grep -qE "BUILD SUCCEEDED"; then
+      -allowProvisioningUpdates JS_BUILD_STAMP="$STAMP" build 2>&1 | grep -qE "BUILD SUCCEEDED"; then
     xcrun devicectl device install app --device "$DEV" \
       /tmp/yt-device/Build/Products/Debug-iphoneos/Jansan.app 2>&1 | grep -E "bundleID"
     echo "$DEV" > "$REMEMBER"      # 次回はこれを最初に試す
     echo "✅ ${MODEL:-$DEV} に入れました"
+    echo "   設定画面のいちばん下に「$STAMP」が出ていれば入れ替わっています"
     exit 0
   fi
   echo "   …使えませんでした。次を試します"
