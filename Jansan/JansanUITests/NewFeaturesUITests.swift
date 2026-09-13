@@ -186,7 +186,7 @@ final class NewFeaturesUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["いちばん安定"].exists, "ばらつきのハイライトが残っている")
         XCTAssertTrue(app.descendants(matching: .any)["latestRecord"].exists, "最近の記録が出ていない")
         // 枠は読み上げ用に1つにまとめているので、見出しで始まる要素を探す
-        for title in ["最多トップ", "皆勤賞", "痛恨の1局"] {
+        for title in ["最多トップ", "最多参加", "痛恨の1局"] {
             let card = app.descendants(matching: .any)
                 .matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
             XCTAssertTrue(card.exists, "ハイライト「\(title)」が無い")
@@ -208,6 +208,7 @@ final class NewFeaturesUITests: XCTestCase {
         XCTAssertTrue(open.waitForExistence(timeout: 10), "個人成績の詳細の入口が無い")
         for _ in 0..<6 where !open.isHittable { app.swipeDown() }
         XCTAssertTrue(open.isHittable, "個人成績の詳細の入口に届かない")
+        attach(app, "個人成績のボタンと成績表")
         open.tap()
         XCTAssertTrue(app.staticTexts["着順"].waitForExistence(timeout: 10), "詳しい成績が開かない")
         let indicator = app.staticTexts["playerPageIndicator"]
@@ -290,7 +291,7 @@ final class NewFeaturesUITests: XCTestCase {
 extension NewFeaturesUITests {
 
     /// 3枚の画像が作られ、共有と保存の導線が出ること
-    func testShareImagesMakesThreePictures() {
+    func testShareImagesMakesFourPictures() {
         let app = launchApp()
         makeRecords(app, count: 2)
 
@@ -308,12 +309,12 @@ extension NewFeaturesUITests {
         XCTAssertTrue(app.buttons["shareImages"].waitForExistence(timeout: 20), "共有の導線が無い")
         XCTAssertTrue(app.buttons["saveToPhotos"].exists, "写真に保存の導線が無い")
 
-        // 3枚できていること。ボタンのアイコンも images に入るので、識別子で数える
-        for index in 0..<3 {
+        // 4枚できていること（最近の記録・累計・ハイライト・着順と推移）。ボタンのアイコンも images に入るので、識別子で数える
+        for index in 0..<4 {
             XCTAssertTrue(app.images["sharePreview\(index)"].waitForExistence(timeout: 15),
                           "\(index + 1)枚目ができていない")
         }
-        XCTAssertFalse(app.images["sharePreview3"].exists, "4枚目ができている")
+        XCTAssertFalse(app.images["sharePreview4"].exists, "5枚目ができている")
         attach(app, "画像で送る")
 
         app.swipeUp()

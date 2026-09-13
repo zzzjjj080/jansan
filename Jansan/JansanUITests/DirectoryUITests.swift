@@ -80,6 +80,15 @@ final class DirectoryUITests: XCTestCase {
         add(shot)
     }
 
+    /// 一覧の行を画面に出す。行に「詳細」「集計」が付いて縦に大きくなり、行が画面の外に出やすくなった。
+    /// 一覧は画面に出ている行しか要素にしないので、上へ送り、それでも無ければ下へ戻して探す
+    @discardableResult
+    private func reveal(_ app: XCUIApplication, _ element: XCUIElement) -> Bool {
+        for _ in 0..<8 where !(element.exists && element.isHittable) { app.swipeUp() }
+        for _ in 0..<14 where !(element.exists && element.isHittable) { app.swipeDown() }
+        return element.exists && element.isHittable
+    }
+
     /// 一覧に着いたかどうか。見出しは消したので、＋ の有無で判断する
     private func atDirectoryList(_ app: XCUIApplication, timeout: TimeInterval = 8) -> Bool {
         app.buttons["addDirectory"].waitForExistence(timeout: timeout)
@@ -113,6 +122,10 @@ final class DirectoryUITests: XCTestCase {
         alert.textFields.firstMatch.tap()
         alert.textFields.firstMatch.typeText(name)
         alert.buttons["作る"].tap()
+
+        // 行に「詳細」「集計」のボタンが付いて縦に大きくなり、作った行（一覧の最後）が画面の下に
+        // 隠れるようになった。一覧は画面に出ている行しか要素にしないので、出てくるまで送る
+        reveal(app, app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch)
     }
 
     /// メニューから「ここを保存先にする」を押し、効いたことを確かめる。
@@ -158,6 +171,7 @@ final class DirectoryUITests: XCTestCase {
         createDirectory(app, named: name)
 
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        reveal(app, row)
         XCTAssertTrue(row.waitForExistence(timeout: 10), "作ったディレクトリが一覧に出ない")
         row.tap()
         XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 10))
@@ -206,6 +220,8 @@ final class DirectoryUITests: XCTestCase {
         createDirectory(app, named: name)
 
         let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
+        // 作ったディレクトリまで送ったので、一番上の「マイ記録」は画面の外にあることがある
+        reveal(app, mine)
         XCTAssertTrue(mine.waitForExistence(timeout: 10), "「マイ記録」が無い")
         mine.swipeLeft()
         // スワイプの操作が無い行では、スワイプが行のタップとして効いて中に入ることがある。
@@ -229,6 +245,7 @@ final class DirectoryUITests: XCTestCase {
         XCTAssertTrue(mine.exists && mine.isHittable, "削除を断ったのに「マイ記録」の行が一覧から消えた")
 
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        reveal(app, row)
         XCTAssertTrue(row.waitForExistence(timeout: 10), "作ったディレクトリが一覧に出ない")
         row.tap()
         XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 10), "作ったディレクトリが開かない（落ちた）")
@@ -236,6 +253,8 @@ final class DirectoryUITests: XCTestCase {
 
         // 一覧に戻っても「マイ記録」は残っている
         app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(atDirectoryList(app), "一覧に戻れない")
+        reveal(app, mine)
         XCTAssertTrue(mine.waitForExistence(timeout: 10), "「マイ記録」が消えた")
     }
 
@@ -253,6 +272,14 @@ final class DirectoryUITests: XCTestCase {
         XCTAssertTrue(stats.waitForExistence(timeout: 15), "一覧から集計が開かない")
         XCTAssertFalse(app.navigationBars["マイ記録"].exists, "集計ではなくディレクトリの中に入った")
         attach(app, "一覧から集計")
+
+        // 閉じて、「詳細」でディレクトリの中に入る
+        app.buttons["閉じる"].firstMatch.tap()
+        let detail = app.buttons["openDirectory-00000000-0000-0000-0000-00000000A001"]
+        XCTAssertTrue(detail.waitForExistence(timeout: 10), "一覧にマイ記録の詳細ボタンが無い")
+        attach(app, "記録の一覧")
+        detail.tap()
+        XCTAssertTrue(app.navigationBars["マイ記録"].waitForExistence(timeout: 10), "「詳細」でディレクトリに入れない")
     }
 
     /// 名前が長くても、集計の画面が横にはみ出さないこと。
@@ -265,6 +292,7 @@ final class DirectoryUITests: XCTestCase {
         createDirectory(app, named: name)
 
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        reveal(app, row)
         XCTAssertTrue(row.waitForExistence(timeout: 10), "作ったディレクトリが一覧に出ない")
         row.tap()
         XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 10))
@@ -312,6 +340,7 @@ final class DirectoryUITests: XCTestCase {
         createDirectory(app, named: name)
 
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        reveal(app, row)
         XCTAssertTrue(row.waitForExistence(timeout: 10), "作ったディレクトリが一覧に出ない")
         row.tap()
         XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 10))
@@ -573,6 +602,7 @@ extension DirectoryUITests {
         createDirectory(app, named: name)
 
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        reveal(app, row)
         XCTAssertTrue(row.waitForExistence(timeout: 10), "作った行が無い")
         row.swipeLeft()
 
@@ -632,6 +662,11 @@ extension DirectoryUITests {
         let backup = app.buttons.matching(
             NSPredicate(format: "label BEGINSWITH '自動バックアップ'")).firstMatch
         XCTAssertTrue(backup.waitForExistence(timeout: 10), "自動バックアップが作られていない")
+        // 自動バックアップは控えの置き場なので、集計のボタンは出さない
+        XCTAssertFalse(app.buttons["openStats-00000000-0000-0000-0000-00000000A002"].exists,
+                       "自動バックアップに集計ボタンが出ている")
+        XCTAssertTrue(app.buttons["openDirectory-00000000-0000-0000-0000-00000000A002"].exists,
+                      "自動バックアップに詳細ボタンが無い")
         XCTAssertFalse(backup.label.contains("0 件"), "控えが入っていない: \(backup.label)")
         attach(app, "自動バックアップ")
     }

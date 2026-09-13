@@ -2,20 +2,26 @@ import SwiftUI
 import Photos
 import JansanCore
 
-/// 3枚の画像を作って、写真アプリへの保存と共有シートに渡す。
+/// 集計を画像にして、写真アプリへの保存と共有シートに渡す。
 ///
-/// 画像そのものの見た目は `ShareImageView`。ここは材料を集めて `ImageRenderer` に
-/// 通すところだけを持つ。
+/// **画面と同じ部品をそのまま画像にする**（普通にスクリーンショットを撮ったのと同じ見た目）。
+/// 以前は画像用に別の図（題名・期間の見出しつき）を描いていたが、画面と見た目が違い、
+/// 全部の画像の上に同じ題名が載って邪魔だった（本人の指示で外した）。
+///
+/// **縦長1枚にはしない。** トークのプレビューで縮小されて数字が読めないので、部品ごとに分ける
 @MainActor
 struct ShareImagesSheet: View {
-    let title: String
-    let subtitle: String
-    let latest: [ShareImageView.Row]
-    let latestHeaders: [String]
-    let totals: [ShareImageView.Row]
-    let totalsHeaders: [String]
-    let series: [(name: String, color: Color, points: [Int])]
-    let decimalMode: Bool
+    struct Page {
+        let caption: String
+        let content: AnyView
+    }
+
+    let pages: [Page]
+    /// いま画面に出ている明るさ。画像も同じにする（ダークモードで見ているならダークの画像）
+    let colorScheme: ColorScheme
+
+    /// 画面と同じ幅で描き、3倍で書き出す。スクリーンショットと同じ細かさになる
+    static let pageWidth: CGFloat = 402
 
     @Environment(\.dismiss) private var dismiss
     @State private var images: [UIImage] = []
@@ -29,7 +35,7 @@ struct ShareImagesSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
-                    Text("この3枚を送れます。縦長1枚だとトークのプレビューで数字が読めないため、分けてあります。")
+                    Text("画面と同じ見た目の\(pages.count)枚です。縦長1枚だとトークのプレビューで数字が読めないため、分けてあります。")
                         .font(.footnote)
                         .foregroundStyle(Palette.inkDim)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -41,7 +47,7 @@ struct ShareImagesSheet: View {
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Palette.line))
                             .accessibilityIdentifier("sharePreview\(index)")
-                            .accessibilityLabel("\(index + 1)枚目 \(ShareImageView.Kind.allCases[index].caption)")
+                            .accessibilityLabel("\(index + 1)枚目 \(pages[index].caption)")
                     }
                 }
                 .padding(16)
@@ -111,19 +117,16 @@ struct ShareImagesSheet: View {
 
     private func render() {
         guard images.isEmpty else { return }
-        images = ShareImageView.Kind.allCases.compactMap { kind in
-            let view = ShareImageView(
-                title: title,
-                subtitle: subtitle,
-                kind: kind,
-                rows: kind == .latest ? latest : totals,
-                series: series,
-                decimalMode: decimalMode,
-                headers: kind == .latest ? latestHeaders : totalsHeaders
-            )
+        images = pages.compactMap { page in
+            let view = page.content
+                .padding(16)
+                .frame(width: Self.pageWidth, alignment: .topLeading)
+                .background(Palette.bg)
+                .fontDesign(.rounded)
+                .environment(\.colorScheme, colorScheme)
             let renderer = ImageRenderer(content: view)
-            // 等倍だと文字がぼやける。2倍で900x1200 → 1800x2400
-            renderer.scale = 2
+            renderer.proposedSize = ProposedViewSize(width: Self.pageWidth, height: nil)
+            renderer.scale = 3
             return renderer.uiImage
         }
     }

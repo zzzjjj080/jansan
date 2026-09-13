@@ -17,6 +17,7 @@ struct AllStatsView: View {
     /// 絞るディレクトリ。nil なら全部
     var directory: Directory? = nil
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     @Query(filter: #Predicate<SavedGame> { !$0.isDraft }, sort: \SavedGame.savedAt, order: .reverse)
     private var allRecords: [SavedGame]
@@ -140,7 +141,6 @@ struct AllStatsView: View {
                         heading("ハイライト")
                         highlights(data)
                         heading("成績")
-                        latestRecord(data)
                         playerDetailsButton(data)
                         table(data)
                         heading("着順の割合")
@@ -148,6 +148,11 @@ struct AllStatsView: View {
                         heading("推移（局ごとの累計）")
                         chart(data)
                         legend(data)
+                        // 最近の記録は一番下（本人の指示）。1回ぶんの表をそのまま見せる
+                        if latestGame(data) != nil {
+                            heading("最近の記録")
+                            latestRecord(data)
+                        }
                         Text("・「個人成績の詳細を見る」から、1人ずつ詳しい成績と相性が見られます\n・着順は局ごとに付けています。同点は表の左の人が上です")
                             .font(.system(size: 11))
                             .foregroundStyle(Palette.inkDim)
@@ -184,16 +189,7 @@ struct AllStatsView: View {
                 }
             }
             .sheet(isPresented: $showImages) {
-                ShareImagesSheet(
-                    title: directory?.name ?? "麻雀の成績",
-                    subtitle: "\(period.label)・\(StatsFormat.styleLabel(style))・\(data.selected.count)対局",
-                    latest: latestRows(data),
-                    latestHeaders: ["順位", "点数"],
-                    totals: totalsRows(data),
-                    totalsHeaders: ["局", "合計", "平着", "トップ"],
-                    series: data.series.map { (name: $0.id, color: $0.color, points: $0.points) },
-                    decimalMode: data.decimalMode
-                )
+                ShareImagesSheet(pages: sharePages(data), colorScheme: colorScheme)
             }
         }
         .onAppear {
@@ -204,38 +200,43 @@ struct AllStatsView: View {
         }
     }
 
-    // MARK: - 画像に載せる中身
+    // MARK: - 画像で送る
 
-    /// ①直近の対局。いちばん新しい対局の着順と点数
-    private func latestRows(_ data: Computed) -> [ShareImageView.Row] {
-        guard let last = data.selected.last else { return [] }
-        let ranked = last.session.playerStats()
-            .filter { $0.played > 0 }
-            .sorted { $0.total > $1.total }
-        return ranked.enumerated().map { index, stat in
-            ShareImageView.Row(
-                name: stat.name,
-                color: data.color(stat.name),
-                values: ["\(index + 1)位",
-                         ScoreFormatter.signedString(stat.total, decimalMode: last.session.decimalMode)],
-                isNegative: [false, stat.total < 0]
-            )
+    /// 画像で送る4枚。**画面と同じ部品をそのまま並べる**（普通にスクリーンショットを撮ったのと同じ見た目）。
+    /// 並びは本人の指示：①最近の記録（共有するとき一番知りたい）②累計の表 ③ハイライト ④着順の割合と推移。
+    /// 題名などの共通の見出しは載せない。個人成績への入口のボタンは画像には要らない
+    private func sharePages(_ data: Computed) -> [ShareImagesSheet.Page] {
+        var pages: [ShareImagesSheet.Page] = []
+        if latestGame(data) != nil {
+            pages.append(.init(caption: "最近の記録", content: AnyView(
+                VStack(alignment: .leading, spacing: 12) {
+                    heading("最近の記録")
+                    latestRecord(data)
+                }
+            )))
         }
-    }
-
-    /// ②期間の累計
-    private func totalsRows(_ data: Computed) -> [ShareImageView.Row] {
-        data.ranked.map { report in
-            ShareImageView.Row(
-                name: report.name,
-                color: data.color(report.name),
-                values: ["\(report.rounds)",
-                         StatsFormat.signed(report.total, data.decimalMode),
-                         StatsFormat.rank(report.averageRank),
-                         StatsFormat.percent(report.topRate)],
-                isNegative: [false, report.total < 0, false, false]
-            )
-        }
+        pages.append(.init(caption: "累計", content: AnyView(
+            VStack(alignment: .leading, spacing: 12) {
+                heading("成績")
+                table(data)
+            }
+        )))
+        pages.append(.init(caption: "ハイライト", content: AnyView(
+            VStack(alignment: .leading, spacing: 12) {
+                heading("ハイライト")
+                highlights(data)
+            }
+        )))
+        pages.append(.init(caption: "着順と推移", content: AnyView(
+            VStack(alignment: .leading, spacing: 12) {
+                heading("着順の割合")
+                rankChart(data)
+                heading("推移（局ごとの累計）")
+                chart(data)
+                legend(data)
+            }
+        )))
+        return pages
     }
 
     // MARK: - 絞り込み
@@ -342,7 +343,8 @@ struct AllStatsView: View {
         }
         // 本人の打った回数と、みんなで打った局数を並べる
         if let r = reports.max(by: { $0.rounds < $1.rounds }) {
-            add("皆勤賞", "calendar.badge.checkmark", r.name, "\(r.rounds)回",
+            // 「皆勤賞」にしない。60回中55回でも1番なら出るので、皆勤とは限らない（本人の指摘）
+            add("最多参加", "calendar.badge.checkmark", r.name, "\(r.rounds)回",
                 note: "全\(data.roundCount)局中の参加回数")
         }
         let regulars = reports.filter { $0.rounds >= Self.minimumRounds }
@@ -376,12 +378,24 @@ struct AllStatsView: View {
     }
 
     /// 3列×3段。9つを1画面の上半分で見渡せるようにする
+    ///
+    /// 遅延の格子（Lazy の付く格子）にしない。画像で送るとき `ImageRenderer` は遅延の格子を描かずに
+    /// 空にすることがある。9枠しかないので、普通の Grid で困らない
     private func highlights(_ data: Computed) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
-                  spacing: 8) {
-            ForEach(highlightItems(data)) { item in
-                HighlightCard(title: item.id, symbol: item.symbol, accent: item.accent, name: item.name,
-                              value: item.value, note: item.note, color: item.color)
+        let items = highlightItems(data)
+        let rows = stride(from: 0, to: items.count, by: 3).map { Array(items[$0..<min($0 + 3, items.count)]) }
+        return Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+            ForEach(rows.indices, id: \.self) { index in
+                GridRow {
+                    ForEach(rows[index]) { item in
+                        HighlightCard(title: item.id, symbol: item.symbol, accent: item.accent, name: item.name,
+                                      value: item.value, note: item.note, color: item.color)
+                    }
+                    // 3つに満たない段も、枠の幅は3等分のままにする
+                    ForEach(0..<(3 - rows[index].count), id: \.self) { _ in
+                        Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+                    }
+                }
             }
         }
     }
@@ -407,51 +421,25 @@ struct AllStatsView: View {
 
     private static let nameMinWidth: CGFloat = 40
 
-    /// **最近の記録。** 対局日がいちばん新しい記録の合計点だけを小さく見せる。
-    /// 集計の表は期間全体の数字なので、「この前の対局はどうだったか」がすぐ見えない
+    /// **最近の記録。** 対局日がいちばん新しい記録を、入力の表と同じ情報（局ごとの点数と合計）で見せる。
+    /// 集計の一番下に置き、画像で送るときは1枚目にする（共有するとき一番知りたいのがこれ。本人の指示）
     @ViewBuilder
     private func latestRecord(_ data: Computed) -> some View {
         if let game = latestGame(data) {
-            let decimal = game.session.decimalMode
-            let ranked = Report.players(games: [game]).enumerated()
-                .sorted { $0.element.total != $1.element.total ? $0.element.total > $1.element.total : $0.offset < $1.offset }
-                .map(\.element)
             VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .accessibilityHidden(true)
-                    Text("最近の記録")
+                HStack(spacing: 8) {
+                    Text(StatsFormat.day(game.playedAt) ?? "")
                         .font(.system(size: 13, weight: .bold))
-                    Spacer(minLength: 4)
-                    Text("\(StatsFormat.day(game.playedAt) ?? "") ・ \(Report.roundCount(games: [game]))局")
+                        .foregroundStyle(Palette.ink)
+                    Text("\(Report.roundCount(games: [game]))局")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Palette.inkDim)
+                    Spacer(minLength: 0)
                 }
-                .foregroundStyle(Palette.ink)
-
-                FlowRow(spacing: 8) {
-                    ForEach(ranked) { report in
-                        HStack(spacing: 5) {
-                            Circle().fill(data.color(report.name)).frame(width: 7, height: 7)
-                            Text(report.name)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(Palette.ink)
-                                .lineLimit(1)
-                            Text(StatsFormat.signed(report.total, decimal))
-                                .font(.system(size: 14, weight: .bold))
-                                .monospacedDigit()
-                                .foregroundStyle(report.total < 0 ? Palette.negative : Palette.ink)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Palette.surface2, in: Capsule())
-                    }
-                }
+                // 画像にするので横に送らず、画面の幅に収める
+                RoundTableView(session: game.session, fitsWidth: true)
             }
-            .padding(12)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Palette.line))
-            .accessibilityElement(children: .combine)
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("latestRecord")
         }
     }
@@ -462,48 +450,21 @@ struct AllStatsView: View {
         return data.selected.first { $0.playedAt == last.playedAt }
     }
 
-    /// 個人成績の入口。**ハイライトの枠と同じ暗い地に、光る枠。** 左に人の色の丸を重ねて、
-    /// 誰の成績が並んでいるかを見せる。表の行からは開かない（入口はここ1つ。本人の指示）
+    /// 個人成績の入口。**緑の線だけの枠に、文字と矢印。** 10種類の試作から本人が選んだ形（2026-09-13。「線だけ」）。
+    /// 押すと1人目から横に送る個人成績が開く。表の行からは開かない（入口はここ1つ）
     private func playerDetailsButton(_ data: Computed) -> some View {
         NavigationLink(value: PlayerPage(start: data.ranked.first?.name ?? "")) {
-            HStack(spacing: 12) {
-                HStack(spacing: -8) {
-                    ForEach(data.ranked.prefix(4)) { report in
-                        Circle()
-                            .fill(data.color(report.name))
-                            .frame(width: 26, height: 26)
-                            .overlay(
-                                Text(String(report.name.prefix(1)))
-                                    .font(.system(size: 12, weight: .heavy))
-                                    .foregroundStyle(HighlightCard.darkInk)
-                            )
-                            .overlay(Circle().strokeBorder(HighlightCard.night, lineWidth: 2))
-                    }
-                }
+            HStack(spacing: 8) {
                 Text("個人成績の詳細を見る")
-                    .font(.system(size: 16, weight: .heavy))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .font(.system(size: 15, weight: .bold))
                 Spacer(minLength: 4)
                 Image(systemName: "arrow.right")
-                    .font(.system(size: 13, weight: .black))
-                    .foregroundStyle(HighlightCard.darkInk)
-                    .frame(width: 32, height: 32)
-                    .background(Palette.accent, in: Circle())
+                    .font(.system(size: 14, weight: .bold))
             }
-            .padding(.horizontal, 14)
+            .foregroundStyle(Palette.accent)
+            .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background {
-                ZStack {
-                    HighlightCard.night
-                    LinearGradient(colors: [Palette.accent.opacity(0.3), .clear],
-                                   startPoint: .leading, endPoint: .trailing)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-            }
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Palette.accent, lineWidth: 1.5))
-            .shadow(color: Palette.accent.opacity(0.4), radius: 8)
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Palette.accent, lineWidth: 1.5))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -518,7 +479,11 @@ struct AllStatsView: View {
         let width = nameWidth(data)
         return VStack(spacing: 0) {
             HStack(spacing: 0) {
+                // 余った幅は左右に半分ずつ。「＞」を外して右だけ空いたので、名前の左にも同じだけ空ける（本人の指示）
+                Spacer(minLength: 0)
+                // 名前の欄は行と同じ組み方にしてそろえる。左右の余白より先に名前へ幅を回す
                 Color.clear.frame(minWidth: Self.nameMinWidth, maxWidth: width, maxHeight: 1)
+                    .layoutPriority(1)
                 ForEach(Self.columns, id: \.title) { column in
                     Text(column.title)
                         .font(.system(size: 11, weight: .bold))
@@ -547,6 +512,7 @@ struct AllStatsView: View {
 
     private func row(_ report: PlayerReport, _ data: Computed, nameWidth: CGFloat) -> some View {
         HStack(spacing: 0) {
+            Spacer(minLength: 0)
             HStack(spacing: 5) {
                 Circle().fill(data.color(report.name)).frame(width: 7, height: 7)
                 // 長い名前は「…」で切らずに縮めて全部見せる。誰の行か分からなくなるので
@@ -557,6 +523,7 @@ struct AllStatsView: View {
                     .minimumScaleFactor(0.5)
             }
             .frame(minWidth: Self.nameMinWidth, maxWidth: nameWidth, alignment: .leading)
+            .layoutPriority(1)
 
             // 率のマスは％を付けない。見出しに「率」と書いてあるので、数字だけの方が詰まって見えない
             let values: [(String, Bool)] = [

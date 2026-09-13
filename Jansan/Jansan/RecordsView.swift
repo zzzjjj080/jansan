@@ -19,6 +19,9 @@ struct RecordsView: View {
     @State private var showNew = false
     /// シートは1本にまとめる。1つの画面に .sheet を複数付けると、どれかが開かなくなることがある
     @State private var sheet: RecordsSheet?
+    /// 行に NavigationLink を置くと、一覧が右端に「＞」を付けて行ごと押せるようにしてしまう。
+    /// 「詳細」ボタンから入るので、行き先は自分で積む
+    @State private var path: [UUID] = []
 
     private enum RecordsSheet: Identifiable {
         case subscribe
@@ -41,15 +44,11 @@ struct RecordsView: View {
     private var receivedTint: Color { Palette.toneCInk }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 Section {
                     ForEach(mine) { dir in
-                        HStack(spacing: 8) {
-                            NavigationLink(value: dir.uid) { row(dir, tint: Palette.accent) }
-                                .accessibilityIdentifier("directory-\(dir.uid.uuidString)")
-                            statsButton(dir, tint: Palette.accent)
-                        }
+                        directoryCell(dir, tint: Palette.accent)
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 // 「マイ記録」は消せない。中の記録の行き先が無くなるので、削除の操作ごと出さない
                                 if !dir.isDefault { deleteAction(dir) }
@@ -64,11 +63,7 @@ struct RecordsView: View {
                 if !received.isEmpty {
                     Section {
                         ForEach(received) { dir in
-                            HStack(spacing: 8) {
-                                NavigationLink(value: dir.uid) { row(dir, tint: receivedTint) }
-                                    .accessibilityIdentifier("directory-\(dir.uid.uuidString)")
-                                statsButton(dir, tint: receivedTint)
-                            }
+                            directoryCell(dir, tint: receivedTint)
                                 .listRowBackground(receivedTint.opacity(0.10))
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     deleteAction(dir)
@@ -164,23 +159,67 @@ struct RecordsView: View {
         .tint(Palette.negative)
     }
 
-    /// **中に入らずに、そのディレクトリの集計を開く。** 以前は中に入ってから右上の集計を押す必要があった。
-    /// 行の中（NavigationLink の中）に置くと行のタップと区別できないので、行の外に並べて borderless にする
+    /// 一覧の1行。上に名前、下に大きな「詳細」「集計」の2つのボタン。
+    ///
+    /// **右端に「＞」は付けない**（本人の指示）。名前の部分を押しても「詳細」と同じく中に入る。
+    /// 1行に複数のボタンを置くときは、どれも `.borderless` にする。一覧はそうしないと
+    /// 行のどこを押しても全部のボタンが反応する
+    private func directoryCell(_ dir: Directory, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                path.append(dir.uid)
+            } label: {
+                row(dir, tint: tint)
+                    .foregroundStyle(Palette.ink)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityIdentifier("directory-\(dir.uid.uuidString)")
+
+            HStack(spacing: 10) {
+                detailButton(dir, tint: tint)
+                // 自動バックアップは控えの置き場。集計する対象ではない
+                if !dir.isAutoBackup {
+                    statsButton(dir, tint: tint)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func detailButton(_ dir: Directory, tint: Color) -> some View {
+        Button {
+            path.append(dir.uid)
+        } label: {
+            cellButtonLabel("詳細", systemImage: "list.bullet.rectangle", tint: tint, filled: false)
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel("「\(dir.name)」の記録を開く")
+        .accessibilityIdentifier("openDirectory-\(dir.uid.uuidString)")
+    }
+
+    /// **中に入らずに、そのディレクトリの集計を開く。** 以前は中に入ってから右上の集計を押す必要があった
     private func statsButton(_ dir: Directory, tint: Color) -> some View {
         Button {
             sheet = .stats(dir.uid)
         } label: {
-            Label("集計", systemImage: "chart.line.uptrend.xyaxis")
-                .labelStyle(.titleAndIcon)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(tint)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(tint.opacity(0.14), in: Capsule())
+            cellButtonLabel("集計", systemImage: "chart.line.uptrend.xyaxis", tint: tint, filled: true)
         }
         .buttonStyle(.borderless)
         .accessibilityLabel("「\(dir.name)」の集計を開く")
         .accessibilityIdentifier("openStats-\(dir.uid.uuidString)")
+    }
+
+    /// 「詳細」「集計」の見た目。指で押しやすい大きさにし、2つで行の幅を分け合う
+    private func cellButtonLabel(_ title: String, systemImage: String, tint: Color, filled: Bool) -> some View {
+        Label(title, systemImage: systemImage)
+            .labelStyle(.titleAndIcon)
+            .font(.system(size: 15, weight: .bold))
+            .foregroundStyle(tint)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(tint.opacity(filled ? 0.22 : 0.10), in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tint.opacity(0.45), lineWidth: 1))
+            .contentShape(Rectangle())
     }
 
     private func row(_ dir: Directory, tint: Color) -> some View {

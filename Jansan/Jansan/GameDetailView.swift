@@ -104,71 +104,9 @@ struct GameDetailView: View {
 
     // MARK: - 表（触れない）
 
+    /// 表の見た目は集計の「最近の記録」と共通（RoundTableView）。人数が多いときは横に送る
     private func table(_ session: Session) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            Grid(horizontalSpacing: 0, verticalSpacing: 0) {
-                GridRow {
-                    cell("局", weight: .heavy, color: Palette.inkDim, width: 34)
-                    ForEach(Array(session.players.enumerated()), id: \.offset) { _, name in
-                        cell(name, weight: .heavy, color: Palette.ink, width: 76)
-                    }
-                }
-                .background(Palette.surface2)
-
-                ForEach(Array(session.rounds.enumerated()), id: \.offset) { index, round in
-                    // 入力待ちの空行は見せない。眺める画面に空欄は要らない
-                    if round.entries.contains(where: { $0.value != nil || $0.isResting }) {
-                        GridRow {
-                            cell("\(index + 1)", weight: .semibold, color: Palette.inkDim, width: 34)
-                            ForEach(Array(round.entries.enumerated()), id: \.offset) { column, entry in
-                                let highlight = round.topAndLastColumns
-                                cell(text(for: entry),
-                                     weight: .semibold,
-                                     color: color(for: entry,
-                                                  isTop: highlight?.top.contains(column) ?? false,
-                                                  isLast: highlight?.last.contains(column) ?? false),
-                                     width: 76)
-                            }
-                        }
-                    }
-                }
-
-                GridRow {
-                    cell("合計", weight: .heavy, color: Palette.inkDim, width: 34)
-                    ForEach(Array(session.totals.enumerated()), id: \.offset) { _, total in
-                        cell(ScoreFormatter.string(total, decimalMode: decimalMode),
-                             weight: .heavy,
-                             color: total < 0 ? Palette.negative : Palette.ink,
-                             width: 76)
-                    }
-                }
-                .background(Palette.surface2)
-            }
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Palette.line))
-        }
-    }
-
-    private func cell(_ text: String, weight: Font.Weight, color: Color, width: CGFloat) -> some View {
-        Text(text)
-            .font(.system(size: 14, weight: weight))
-            .monospacedDigit()
-            .foregroundStyle(color)
-            .frame(width: width, height: 32)
-    }
-
-    private func text(for entry: Entry) -> String {
-        if entry.isResting { return "－" }
-        guard let value = entry.value else { return "" }
-        return ScoreFormatter.string(value, decimalMode: decimalMode)
-    }
-
-    private func color(for entry: Entry, isTop: Bool, isLast: Bool) -> Color {
-        if entry.isResting { return Palette.resting }
-        guard let value = entry.value else { return Palette.inkDim }
-        if isTop { return Palette.topInk }
-        if isLast || value < 0 { return Palette.negative }
-        return Palette.ink
+        RoundTableView(session: session)
     }
 
     // MARK: - 着順と推移
