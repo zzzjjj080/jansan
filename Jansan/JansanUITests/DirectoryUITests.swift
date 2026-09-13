@@ -239,6 +239,55 @@ final class DirectoryUITests: XCTestCase {
         XCTAssertTrue(mine.waitForExistence(timeout: 10), "「マイ記録」が消えた")
     }
 
+    /// 名前が長くても、集計の画面が横にはみ出さないこと。
+    /// 成績表の名前の欄を「いちばん長い名前の幅」で固定したら、表が画面より広くなり、
+    /// 集計の画面ごと左右が切れた（期間の切り替えの左端が画面の外に出た）
+    func testStatsDoNotOverflowWithLongNames() {
+        let app = launchApp()
+        let name = uniqueName("長名")
+        openRecordsTab(app)
+        createDirectory(app, named: name)
+
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "作ったディレクトリが一覧に出ない")
+        row.tap()
+        XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 10))
+
+        // 長い名前の表を CSV で入れる
+        app.buttons["directoryMenu"].tap()
+        let item = app.buttons["importCSV"]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "「CSVを貼って取り込む」が無い")
+        item.tap()
+        let field = app.textViews["csvPasteField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10), "貼り付け欄が無い")
+        field.tap()
+        field.typeText("No,ながいなまえのひと,ふたりめのながいなまえ,さんにんめのながいなまえ,よにんめのながいなまえ\n1,30,10,-10,-30\n2,-20,40,0,-20\n")
+        app.buttons["previewCSV"].tap()
+        let commit = app.buttons["commitCSV"]
+        XCTAssertTrue(commit.waitForExistence(timeout: 10), "取り込む内容が出ない")
+        XCTAssertTrue(scrollTo(app, commit), "取り込むボタンに届かない")
+        commit.tap()
+        let done = app.alerts["取り込みました"]
+        XCTAssertTrue(done.waitForExistence(timeout: 10), "取り込みの完了が出ない")
+        done.buttons["OK"].tap()
+
+        // 集計を開いて、左右の端が画面の中にあること
+        app.buttons["directoryStats"].tap()
+        let all = app.buttons["全期間"]
+        XCTAssertTrue(all.waitForExistence(timeout: 15), "集計が開かない")
+        let width = app.windows.firstMatch.frame.width
+        XCTAssertGreaterThanOrEqual(all.frame.minX, 0, "集計の画面が左にはみ出している: \(all.frame)")
+
+        let open = app.buttons["openPlayerDetails"]
+        XCTAssertTrue(open.waitForExistence(timeout: 10), "個人成績の詳細の入口が無い")
+        for _ in 0..<6 where !open.isHittable { app.swipeUp() }
+        XCTAssertLessThanOrEqual(open.frame.maxX, width + 0.5, "集計の画面が右にはみ出している: \(open.frame)")
+        let lastRate = app.staticTexts["ラス率"]
+        XCTAssertTrue(lastRate.exists, "成績表の見出しが無い")
+        XCTAssertLessThanOrEqual(lastRate.frame.maxX, width + 0.5, "成績表が画面からはみ出している: \(lastRate.frame)")
+        attach(app, "長い名前の集計")
+    }
+
     /// CSV を貼ると、そのディレクトリに「日付未記入」で入り、あとから日付を入れられること
     func testImportCSVIntoDirectory() {
         let app = launchApp()
