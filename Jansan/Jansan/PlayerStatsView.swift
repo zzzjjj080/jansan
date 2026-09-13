@@ -33,6 +33,8 @@ struct PlayerStatsView: View {
             }
         }
         .listStyle(.insetGrouped)
+        // 集計画面と同じ書体にそろえる
+        .fontDesign(.rounded)
         .navigationTitle(name)
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -272,10 +274,11 @@ enum StatsFormat {
         }
     }
 
-    /// 1位は緑、最下位は赤、あいだは落ち着いた色
+    /// 1位は緑、最下位は赤、あいだは青みの灰と黄土。**隣り合う着順を似た色にしない**
+    /// （2位と3位をどちらも灰色にしていて、割合のグラフで境目が読めなかった）
     static func rankColor(_ rank: Int, seats: Int) -> Color {
         if rank == 1 { return Palette.accent }
         if rank >= seats { return Palette.negative }
-        return rank == 2 ? Palette.toneBInk : Palette.inkDim
+        return rank == 2 ? Palette.toneBInk : Palette.toneAInk
     }
 }

@@ -192,10 +192,18 @@ final class NewFeaturesUITests: XCTestCase {
         }
         attach(app, "全記録のビュー")
 
-        // 名前をタップすると、1人ぶんの詳しい成績と相性
+        // 着順の割合のグラフまで送って撮る。詳細に入る前に撮り、戻る操作を挟まない
+        let chartHeading = app.staticTexts["着順の割合"]
+        for _ in 0..<6 where !(chartHeading.exists && chartHeading.frame.minY < app.frame.height * 0.3) {
+            app.swipeUp()
+        }
+        attach(app, "着順の割合")
+
+        // 名前をタップすると、1人ぶんの詳しい成績と相性。グラフより上にあるので送り戻す
         let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'statsRow-'")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 10), "成績の行が無い")
-        XCTAssertTrue(scrollTo(app, row), "成績の行に届かない")
+        for _ in 0..<6 where !row.isHittable { app.swipeDown() }
+        XCTAssertTrue(row.isHittable, "成績の行に届かない")
         row.tap()
         XCTAssertTrue(app.staticTexts["着順"].waitForExistence(timeout: 10), "詳しい成績が開かない")
         attach(app, "1人の詳しい成績")

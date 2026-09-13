@@ -70,15 +70,19 @@ struct AllStatsView: View {
         let seats: Int
         let decimalMode: Bool
         let series: [Series]
+        /// 色の割り当て。**このディレクトリの全記録（全期間・三麻と四麻の両方）で初めて出てきた順。**
+        /// 期間や打ち方を切り替えるたびに並びが変わると、同じ人の色まで変わってしまう
+        let colorOrder: [String]
 
         func color(_ name: String) -> Color {
-            let index = reports.firstIndex { $0.name == name } ?? 0
+            let index = colorOrder.firstIndex(of: name) ?? colorOrder.count
             return Palette.playerColors[index % Palette.playerColors.count]
         }
     }
 
     private func compute() -> Computed {
         let all = games
+        let colorOrder = Report.players(games: all).map(\.name)
         let selected = Report.select(games: all, period: period.core, style: style, decimalMode: decimalMode)
         let reports = Report.players(games: selected)
         let ranked = reports.enumerated()
@@ -92,13 +96,13 @@ struct AllStatsView: View {
 
         let partial = Computed(selected: selected, reports: reports, ranked: ranked,
                                roundCount: Report.roundCount(games: selected), unknownDateGames: unknown,
-                               seats: seats, decimalMode: decimal, series: [])
+                               seats: seats, decimalMode: decimal, series: [], colorOrder: colorOrder)
         let series = Aggregator.cumulative(games: selected).map { item in
             Series(id: item.name, color: partial.color(item.name), points: item.values)
         }
         return Computed(selected: selected, reports: reports, ranked: ranked,
                         roundCount: partial.roundCount, unknownDateGames: unknown,
-                        seats: seats, decimalMode: decimal, series: series)
+                        seats: seats, decimalMode: decimal, series: series, colorOrder: colorOrder)
     }
 
     private var hasMixedDecimalModes: Bool {
@@ -145,6 +149,8 @@ struct AllStatsView: View {
                 }
                 .padding(16)
             }
+            // 数字も漢字も同じ書体にそろえる。場所ごとに書体を指定すると混ざる
+            .fontDesign(.rounded)
             .background(Palette.bg)
             .navigationTitle(directory.map { "\($0.name)の集計" } ?? "全記録のビュー")
             .navigationBarTitleDisplayMode(.inline)
@@ -268,7 +274,7 @@ struct AllStatsView: View {
     private func summary(_ data: Computed) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("\(data.selected.count) 対局 ・ \(data.roundCount) 局 ・ \(StatsFormat.styleLabel(style))")
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(Palette.accent)
             if data.unknownDateGames > 0 {
                 Text("日付未記入の \(data.unknownDateGames) 対局は「全期間」でだけ数えます")
@@ -280,7 +286,7 @@ struct AllStatsView: View {
 
     private func heading(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 12, weight: .bold))
+            .font(.system(size: 13, weight: .bold))
             .kerning(0.5)
             .foregroundStyle(Palette.inkDim)
     }
@@ -289,6 +295,7 @@ struct AllStatsView: View {
 
     private struct Highlight: Identifiable {
         let id: String
+        let symbol: String
         let name: String
         let value: String
         /// 名前の下に添える一言（連続トップを出した日など）
@@ -296,49 +303,51 @@ struct AllStatsView: View {
         let color: Color
     }
 
+    /// 率で並べるハイライトの対象にする最低の局数。数局だけの人が100%で並ばないように
+    private static let minimumRounds = 5
+
     private func highlightItems(_ data: Computed) -> [Highlight] {
         let reports = data.reports
         let decimal = data.decimalMode
         var items: [Highlight] = []
-        func add(_ title: String, _ report: PlayerReport?, note: ((PlayerReport) -> String?)? = nil,
-                 _ value: (PlayerReport) -> String) {
-            guard let report else { return }
-            items.append(Highlight(id: title, name: report.name, value: value(report),
-                                   note: note?(report), color: data.color(report.name)))
+        func add(_ title: String, _ symbol: String, _ name: String, _ value: String, note: String? = nil) {
+            items.append(Highlight(id: title, symbol: symbol, name: name, value: value,
+                                   note: note, color: data.color(name)))
         }
 
-        add("最多トップ", reports.max { $0.count(ofRank: 1) < $1.count(ofRank: 1) }) {
-            "\($0.count(ofRank: 1))回"
+        if let r = reports.max(by: { $0.count(ofRank: 1) < $1.count(ofRank: 1) }) {
+            add("最多トップ", "crown.fill", r.name, "\(r.count(ofRank: 1))回")
         }
-        add("最高の1局", reports.max { ($0.bestRound ?? .min) < ($1.bestRound ?? .min) }) {
-            StatsFormat.signed($0.bestRound ?? 0, decimal)
+        if let r = reports.max(by: { ($0.bestRound ?? .min) < ($1.bestRound ?? .min) }), let best = r.bestRound {
+            add("最高の1局", "star.fill", r.name, StatsFormat.signed(best, decimal))
         }
-        add("連続トップ", reports.max { $0.longestTopStreak < $1.longestTopStreak },
-            note: { StatsFormat.day($0.longestTopStreakDate) }) {
-            "\($0.longestTopStreak)連続"
+        if let r = reports.max(by: { $0.longestTopStreak < $1.longestTopStreak }) {
+            add("連続トップ", "flame.fill", r.name, "\(r.longestTopStreak)連続",
+                note: StatsFormat.day(r.longestTopStreakDate))
         }
-        add("最高の対局", reports.max { ($0.bestGame ?? .min) < ($1.bestGame ?? .min) }) {
-            StatsFormat.signed($0.bestGame ?? 0, decimal)
+        if let r = reports.max(by: { ($0.bestGame ?? .min) < ($1.bestGame ?? .min) }), let best = r.bestGame {
+            add("最高の対局", "trophy.fill", r.name, StatsFormat.signed(best, decimal))
         }
-        // 数局しか打っていない人の率は当てにならない。5局以上に絞る
-        let regulars = reports.filter { $0.rounds >= 5 }
-        add("ラス回避率", regulars.max { ($0.lastAvoidRate ?? 0) < ($1.lastAvoidRate ?? 0) }) {
-            StatsFormat.percent($0.lastAvoidRate)
+        let regulars = reports.filter { $0.rounds >= Self.minimumRounds }
+        if let r = regulars.max(by: { ($0.lastAvoidRate ?? 0) < ($1.lastAvoidRate ?? 0) }) {
+            add("ラス回避率", "shield.fill", r.name, StatsFormat.percent(r.lastAvoidRate))
         }
-        add("平均着順", regulars.min { ($0.averageRank ?? .infinity) < ($1.averageRank ?? .infinity) }) {
-            StatsFormat.rank($0.averageRank)
+        if let r = regulars.min(by: { ($0.averageRank ?? .infinity) < ($1.averageRank ?? .infinity) }) {
+            add("平均着順", "medal.fill", r.name, StatsFormat.rank(r.averageRank))
         }
-        // 直近の局だけで見た平均着順。全期間の数字に埋もれる「今の強さ」
-        add("絶好調",
-            regulars.min { ($0.recent?.averageRank ?? .infinity) < ($1.recent?.averageRank ?? .infinity) },
-            note: { $0.recent.map { "直近\($0.rounds)局" } }) {
-            StatsFormat.rank($0.recent?.averageRank)
+        // 卓全体の直近で切る。しばらく来ていない人の昔の好成績を「今」として出さない
+        let hot = Report.recentWindow(games: data.selected)
+            .filter { $0.rounds >= Self.minimumRounds }
+            .max { $0.averageScore < $1.averageScore }
+        if let hot {
+            add("絶好調", "bolt.fill", hot.name, StatsFormat.average(hot.averageScore, decimal),
+                note: "直近\(min(Report.hotWindow, data.roundCount))局の1局平均")
         }
-        add("皆勤賞", reports.max { $0.rounds < $1.rounds }) {
-            "\($0.rounds)局"
+        if let r = reports.max(by: { $0.rounds < $1.rounds }) {
+            add("皆勤賞", "calendar", r.name, "\(r.rounds)局")
         }
-        add("痛恨の1局", reports.min { ($0.worstRound ?? .max) < ($1.worstRound ?? .max) }) {
-            StatsFormat.signed($0.worstRound ?? 0, decimal)
+        if let r = reports.min(by: { ($0.worstRound ?? .max) < ($1.worstRound ?? .max) }), let worst = r.worstRound {
+            add("痛恨の1局", "cloud.bolt.rain.fill", r.name, StatsFormat.signed(worst, decimal))
         }
         return items
     }
@@ -356,37 +365,62 @@ struct AllStatsView: View {
     /// 塗りつぶした枠の上の文字。人の色はどれも明るめなので、白より濃い色の方が読める
     private static let onColorInk = Color(red: 0.06, green: 0.08, blue: 0.06)
 
-    /// **枠をその人の色で塗る。** 表やグラフと同じ色なので、誰の記録かが一目で分かる
+    /// **枠をその人の色で塗り、文字は中央にそろえる。**
+    /// 高さを固定して、日付の有無で枠の大きさがばらつかないようにする
     private func card(_ item: Highlight) -> some View {
-        // 3列だと1枠の幅は110pt前後。名前や日付は切らずに縮める
-        VStack(alignment: .leading, spacing: 2) {
-            Text(item.id)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(Self.onColorInk.opacity(0.72))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+        VStack(spacing: 5) {
+            HStack(spacing: 3) {
+                Image(systemName: item.symbol)
+                    .font(.system(size: 9, weight: .black))
+                    .accessibilityHidden(true)
+                Text(item.id)
+                    .font(.system(size: 11, weight: .heavy))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .foregroundStyle(Self.onColorInk.opacity(0.7))
+
             Text(item.value)
-                .font(.system(size: 22, weight: .heavy, design: .rounded))
+                .font(.system(size: 26, weight: .black))
                 .monospacedDigit()
                 .foregroundStyle(Self.onColorInk)
                 .lineLimit(1)
-                .minimumScaleFactor(0.6)
+                .minimumScaleFactor(0.5)
+
             Text(item.name)
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(Self.onColorInk)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-            if let note = item.note {
-                Text(note)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Self.onColorInk.opacity(0.72))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-            }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .background(.white.opacity(0.35), in: Capsule())
+
+            // 日付の無い枠も同じ段組みにして、値と名前の位置をそろえる
+            Text(item.note ?? "–")
+                .font(.system(size: 9.5, weight: .semibold))
+                .foregroundStyle(Self.onColorInk.opacity(0.7))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .opacity(item.note == nil ? 0 : 1)
+                .accessibilityHidden(item.note == nil)
         }
-        .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
-        .padding(10)
-        .background(item.color, in: RoundedRectangle(cornerRadius: 12))
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .frame(height: 124)
+        .padding(.horizontal, 6)
+        .background {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(item.color)
+                // 上から薄い光を当てて、平らな色面にしない
+                .overlay(
+                    LinearGradient(colors: [.white.opacity(0.28), .white.opacity(0)],
+                                   startPoint: .top, endPoint: .center)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                )
+                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.25), lineWidth: 1))
+                .shadow(color: item.color.opacity(0.35), radius: 6, y: 3)
+        }
         .accessibilityElement(children: .combine)
     }
 
@@ -473,7 +507,7 @@ struct AllStatsView: View {
 
     private func cell(_ text: String, negative: Bool, width: CGFloat) -> some View {
         Text(text)
-            .font(.system(size: 14, weight: .semibold, design: .rounded))
+            .font(.system(size: 14, weight: .semibold))
             .monospacedDigit()
             .foregroundStyle(negative ? Palette.negative : Palette.ink)
             .lineLimit(1)
@@ -500,36 +534,62 @@ struct AllStatsView: View {
         let rate: Double
     }
 
-    private func rankShares(_ data: Computed) -> [RankShare] {
-        data.ranked.flatMap { report in
-            (1...data.seats).map { rank in
+    private func rankShares(_ order: [PlayerReport], seats: Int) -> [RankShare] {
+        order.flatMap { report in
+            (1...seats).map { rank in
                 RankShare(id: "\(report.name)-\(rank)", name: report.name, rank: "\(rank)位",
                           rate: report.rounds > 0 ? Double(report.count(ofRank: rank)) / Double(report.rounds) : 0)
             }
         }
     }
 
+    /// 1局の平均点の高い順。合計だと、打った局数の多い人が上に来てしまう
+    private func byAverageScore(_ reports: [PlayerReport]) -> [PlayerReport] {
+        reports.enumerated()
+            .sorted { lhs, rhs in
+                let l = lhs.element.averageScore ?? -.infinity
+                let r = rhs.element.averageScore ?? -.infinity
+                return l != r ? l > r : lhs.offset < rhs.offset
+            }
+            .map(\.element)
+    }
+
     private func rankChart(_ data: Computed) -> some View {
-        let shares = rankShares(data)
-        let names = data.ranked.map(\.name)
+        let order = byAverageScore(data.reports)
+        let shares = rankShares(order, seats: data.seats)
+        let names = order.map(\.name)
         let ranks = (1...data.seats).map { "\($0)位" }
         let colors = (1...data.seats).map { StatsFormat.rankColor($0, seats: data.seats) }
         return Chart(shares) { share in
-            BarMark(x: .value("割合", share.rate), y: .value("名前", share.name))
+            BarMark(x: .value("割合", share.rate), y: .value("名前", share.name), height: .fixed(30))
                 .foregroundStyle(by: .value("着順", share.rank))
+                .annotation(position: .overlay) {
+                    // 細い区間に数字を入れると潰れて読めない。1割以上の区間だけに書く
+                    if share.rate >= 0.1 {
+                        Text("\(Int((share.rate * 100).rounded()))%")
+                            .font(.system(size: 11, weight: .heavy))
+                            .foregroundStyle(Self.onColorInk)
+                    }
+                }
         }
         .chartForegroundStyleScale(domain: ranks, range: colors)
         .chartYScale(domain: names)
-        .chartXAxis {
-            AxisMarks(values: [0.0, 0.25, 0.5, 0.75, 1.0]) { value in
-                AxisGridLine()
+        .chartXScale(domain: 0...1)
+        // 割合は棒の中に書くので、下の目盛りは要らない
+        .chartXAxis(.hidden)
+        .chartYAxis {
+            AxisMarks(position: .leading) { value in
                 AxisValueLabel {
-                    if let rate = value.as(Double.self) { Text("\(Int(rate * 100))%") }
+                    if let name = value.as(String.self) {
+                        Text(name)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Palette.ink)
+                    }
                 }
             }
         }
-        .chartLegend(position: .bottom, alignment: .leading)
-        .frame(height: CGFloat(max(2, names.count)) * 32 + 48)
+        .chartLegend(position: .top, alignment: .leading, spacing: 10)
+        .frame(height: CGFloat(max(2, names.count)) * 44 + 36)
     }
 
     // MARK: - 推移

@@ -219,3 +219,35 @@ struct RecordOrderTests {
                                        before: base, saved: base))
     }
 }
+
+@Suite("絶好調（卓の直近で切る）")
+struct RecentWindowTests {
+
+    @Test("しばらく来ていない人は、直近の局に入らない")
+    func absentPlayerDropsOut() {
+        // A は昔の5局で大勝ち。そのあと A 抜きで20局
+        let old = game(abcd, Array(repeating: [60, -20, -20, -20], count: 5), day: 1)
+        let recent = game(abcd + ["E"], Array(repeating: [nil, 10, 0, -10, 0], count: 20), day: 2)
+        let window = Report.recentWindow(games: [recent, old])
+        #expect(window.contains { $0.name == "A" } == false)
+        #expect(window.first { $0.name == "B" }?.rounds == 20)
+        #expect(window.first { $0.name == "B" }?.averageScore == 10)
+    }
+
+    @Test("直近の局が足りなければ、ある分だけで見る")
+    func shortHistory() {
+        let a = Report.recentWindow(games: [game(abcd, [[30, 10, -10, -30], [20, 0, -10, -10]])])
+            .first { $0.name == "A" }!
+        #expect(a.rounds == 2)
+        #expect(a.total == 50)
+        #expect(a.averageScore == 25)
+    }
+
+    @Test("直近は対局日の順で決める。配列の並びではない")
+    func windowFollowsDates() {
+        let newer = game(abcd, [[30, 10, -10, -30]], day: 2)
+        let older = game(abcd, [[-30, 10, -10, 30]], day: 1)
+        let a = Report.recentWindow(games: [newer, older], window: 1).first { $0.name == "A" }!
+        #expect(a.total == 30)
+    }
+}

@@ -83,10 +83,49 @@ public struct Matchup: Equatable, Sendable, Identifiable {
     public var averageDifference: Double { rounds > 0 ? Double(difference) / Double(rounds) : 0 }
 }
 
+/// 卓の直近の局だけで見た、1人ぶんの成績。「絶好調」に使う
+public struct WindowForm: Equatable, Sendable, Identifiable {
+    public var id: String { name }
+    public let name: String
+    /// 直近の局のうち、この人が打った局数
+    public let rounds: Int
+    public let total: Int
+
+    public var averageScore: Double { rounds > 0 ? Double(total) / Double(rounds) : 0 }
+}
+
 public enum Report {
 
-    /// 「最近」とみなす局数
+    /// 「最近」とみなす局数（その人が打った局で数える。詳細の「最近の調子」）
     public static let recentRounds = 10
+
+    /// 「絶好調」で見る局数（卓全体の直近で数える）
+    public static let hotWindow = 20
+
+    /// 選んだ対局の中で、**いちばん新しい `window` 局**だけを見た成績。
+    ///
+    /// **その人が打った直近ではなく、卓全体の直近で切る。** その人の直近で数えると、
+    /// しばらく来ていない人の昔の好成績が「今の調子」として残り続ける
+    public static func recentWindow(games: [GameForStats], window: Int = hotWindow) -> [WindowForm] {
+        let recent = chronological(games)
+            .flatMap { game in
+                completedRounds(of: game.session).map { (players: game.session.players, round: $0) }
+            }
+            .suffix(window)
+
+        var order: [String] = []
+        var rounds: [String: Int] = [:], totals: [String: Int] = [:]
+        for item in recent {
+            for column in item.round.playingColumns {
+                guard let value = item.round.entries[column].value else { continue }
+                let name = item.players[column]
+                if rounds[name] == nil { order.append(name) }
+                rounds[name, default: 0] += 1
+                totals[name, default: 0] += value
+            }
+        }
+        return order.map { WindowForm(name: $0, rounds: rounds[$0] ?? 0, total: totals[$0] ?? 0) }
+    }
 
     /// 記録にある打ち方。四麻を先に並べる
     public static func availableStyles(games: [GameForStats]) -> [Int] {
