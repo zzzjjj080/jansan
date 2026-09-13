@@ -201,7 +201,8 @@ final class NewFeaturesUITests: XCTestCase {
         attach(app, "着順の割合")
 
         // 「個人成績の詳細を見る」から開く。グラフより上にあるので送り戻す
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'statsRow-'"))
+        // 行はボタンではない（個人成績は上のボタンからだけ開く）。並んでいることだけを見る
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'statsRow-'"))
                         .firstMatch.exists, "成績の行が無い")
         let open = app.buttons["openPlayerDetails"]
         XCTAssertTrue(open.waitForExistence(timeout: 10), "個人成績の詳細の入口が無い")

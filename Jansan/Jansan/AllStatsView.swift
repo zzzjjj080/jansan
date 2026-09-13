@@ -148,7 +148,7 @@ struct AllStatsView: View {
                         heading("推移（局ごとの累計）")
                         chart(data)
                         legend(data)
-                        Text("・名前をタップすると、その人の詳しい成績と相性が見られます\n・着順は局ごとに付けています。同点は表の左の人が上です")
+                        Text("・「個人成績の詳細を見る」から、1人ずつ詳しい成績と相性が見られます\n・着順は局ごとに付けています。同点は表の左の人が上です")
                             .font(.system(size: 11))
                             .foregroundStyle(Palette.inkDim)
                             .fixedSize(horizontal: false, vertical: true)
@@ -396,7 +396,6 @@ struct AllStatsView: View {
     private static let columns: [(title: String, width: CGFloat)] = [
         ("局", 28), ("合計", 48), ("平均", 42), ("平着", 38), ("トップ率", 42), ("連対率", 40), ("ラス率", 40),
     ]
-    private static let chevronWidth: CGFloat = 12
 
     /// 名前の欄の**上限**。いちばん長い名前が入る幅。余った幅を名前に回すと、短い名前のとき局数との間が空きすぎる。
     /// **上限であって固定ではない。** 固定にすると長い名前（「プレイヤー2」など）で表が画面より広くなり、
@@ -463,28 +462,55 @@ struct AllStatsView: View {
         return data.selected.first { $0.playedAt == last.playedAt }
     }
 
-    /// 表の行をタップしても開けるが、それに気づきにくい。入口をはっきり置く
+    /// 個人成績の入口。**ハイライトの枠と同じ暗い地に、光る枠。** 左に人の色の丸を重ねて、
+    /// 誰の成績が並んでいるかを見せる。表の行からは開かない（入口はここ1つ。本人の指示）
     private func playerDetailsButton(_ data: Computed) -> some View {
         NavigationLink(value: PlayerPage(start: data.ranked.first?.name ?? "")) {
-            HStack(spacing: 8) {
-                Image(systemName: "person.text.rectangle.fill")
+            HStack(spacing: 12) {
+                HStack(spacing: -8) {
+                    ForEach(data.ranked.prefix(4)) { report in
+                        Circle()
+                            .fill(data.color(report.name))
+                            .frame(width: 26, height: 26)
+                            .overlay(
+                                Text(String(report.name.prefix(1)))
+                                    .font(.system(size: 12, weight: .heavy))
+                                    .foregroundStyle(HighlightCard.darkInk)
+                            )
+                            .overlay(Circle().strokeBorder(HighlightCard.night, lineWidth: 2))
+                    }
+                }
                 Text("個人成績の詳細を見る")
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(size: 16, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 Spacer(minLength: 4)
-                Text("スワイプで次の人")
-                    .font(.system(size: 11, weight: .semibold))
-                    .opacity(0.8)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 13, weight: .black))
+                    .foregroundStyle(HighlightCard.darkInk)
+                    .frame(width: 32, height: 32)
+                    .background(Palette.accent, in: Circle())
             }
-            .foregroundStyle(Palette.accentInk)
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(Palette.accent, in: RoundedRectangle(cornerRadius: 12))
+            .background {
+                ZStack {
+                    HighlightCard.night
+                    LinearGradient(colors: [Palette.accent.opacity(0.3), .clear],
+                                   startPoint: .leading, endPoint: .trailing)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+            }
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Palette.accent, lineWidth: 1.5))
+            .shadow(color: Palette.accent.opacity(0.4), radius: 8)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(data.ranked.isEmpty)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("個人成績の詳細を見る")
+        .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("openPlayerDetails")
     }
 
@@ -502,16 +528,13 @@ struct AllStatsView: View {
                         .frame(width: column.width)
                 }
                 Spacer(minLength: 0)
-                Color.clear.frame(width: Self.chevronWidth, height: 1)
             }
             .padding(.bottom, 8)
 
             ForEach(data.ranked) { report in
-                NavigationLink(value: PlayerPage(start: report.name)) {
-                    row(report, data, nameWidth: width)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("statsRow-\(report.name)")
+                // 行からは開かない。入口は上の「個人成績の詳細を見る」だけ（本人の指示）
+                row(report, data, nameWidth: width)
+                    .accessibilityIdentifier("statsRow-\(report.name)")
                 if report.id != data.ranked.last?.id {
                     Divider()
                 }
@@ -549,11 +572,6 @@ struct AllStatsView: View {
                 cell(pair.1.0, negative: pair.1.1, width: pair.0.width)
             }
             Spacer(minLength: 0)
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(Palette.inkDim)
-                .frame(width: Self.chevronWidth, alignment: .trailing)
         }
         .padding(.vertical, 12)
         .contentShape(Rectangle())
