@@ -328,12 +328,25 @@ struct AllStatsView: View {
         add("平均着順", regulars.min { ($0.averageRank ?? .infinity) < ($1.averageRank ?? .infinity) }) {
             StatsFormat.rank($0.averageRank)
         }
+        // 直近の局だけで見た平均着順。全期間の数字に埋もれる「今の強さ」
+        add("絶好調",
+            regulars.min { ($0.recent?.averageRank ?? .infinity) < ($1.recent?.averageRank ?? .infinity) },
+            note: { $0.recent.map { "直近\($0.rounds)局" } }) {
+            StatsFormat.rank($0.recent?.averageRank)
+        }
+        add("皆勤賞", reports.max { $0.rounds < $1.rounds }) {
+            "\($0.rounds)局"
+        }
+        add("痛恨の1局", reports.min { ($0.worstRound ?? .max) < ($1.worstRound ?? .max) }) {
+            StatsFormat.signed($0.worstRound ?? 0, decimal)
+        }
         return items
     }
 
+    /// 3列×3段。9つを1画面の上半分で見渡せるようにする
     private func highlights(_ data: Computed) -> some View {
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)],
-                  spacing: 10) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
+                  spacing: 8) {
             ForEach(highlightItems(data)) { item in
                 card(item)
             }
@@ -345,31 +358,35 @@ struct AllStatsView: View {
 
     /// **枠をその人の色で塗る。** 表やグラフと同じ色なので、誰の記録かが一目で分かる
     private func card(_ item: Highlight) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+        // 3列だと1枠の幅は110pt前後。名前や日付は切らずに縮める
+        VStack(alignment: .leading, spacing: 2) {
             Text(item.id)
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(Self.onColorInk.opacity(0.72))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Text(item.value)
-                .font(.system(size: 26, weight: .heavy, design: .rounded))
+                .font(.system(size: 22, weight: .heavy, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(Self.onColorInk)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
             Text(item.name)
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(Self.onColorInk)
                 .lineLimit(1)
+                .minimumScaleFactor(0.6)
             if let note = item.note {
                 Text(note)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Self.onColorInk.opacity(0.72))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.6)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
-        .padding(12)
-        .background(item.color, in: RoundedRectangle(cornerRadius: 14))
+        .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
+        .padding(10)
+        .background(item.color, in: RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
     }
 
