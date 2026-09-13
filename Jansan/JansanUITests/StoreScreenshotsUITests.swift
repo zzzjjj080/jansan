@@ -29,7 +29,7 @@ final class StoreScreenshotsUITests: XCTestCase {
     }
 
     @discardableResult
-    private func scrollTo(_ app: XCUIApplication, _ element: XCUIElement, tries: Int = 12) -> Bool {
+    private func scrollTo(_ app: XCUIApplication, _ element: XCUIElement, tries: Int = 20) -> Bool {
         for _ in 0..<tries {
             if element.exists && element.isHittable { return true }
             app.swipeUp()
@@ -41,7 +41,11 @@ final class StoreScreenshotsUITests: XCTestCase {
     private func seed(_ app: XCUIApplication, rounds: Int) {
         openSettings(app)
         let button = app.buttons["デモデータを\(rounds)局入れる"]
-        XCTAssertTrue(scrollTo(app, button), "デモデータのボタンが無い（Debugビルドで走らせること）")
+        if !scrollTo(app, button) {
+            shot(app, "NG-デモデータのボタンが無い")
+            XCTFail("デモデータのボタンが無い（Debugビルドで走らせること）")
+            return
+        }
         button.tap()
     }
 
@@ -68,16 +72,18 @@ final class StoreScreenshotsUITests: XCTestCase {
         app.launchArguments = ["-didShowHowTo", "YES"]
         app.launch()
 
-        // 集計に数字が並ぶよう、局数の違う記録を3回ぶん残す（勝つ人が回ごとに変わる）
-        for rounds in [12, 8, 3] {
-            seed(app, rounds: rounds)
-            save(app)
-        }
-
-        // 01 入力画面
+        // 01 入力画面。12局の表を入れた直後に撮り、そのまま記録に残す
+        // （撮るためだけにもう1回入れ直すと、4回目の設定でボタンに届かず落ちたことがある）
         seed(app, rounds: 12)
         sleep(1)
         shot(app, "01-main")
+        save(app)
+
+        // 集計に数字が並ぶよう、局数の違う記録をあと2回ぶん残す（勝つ人が回ごとに変わる）
+        for rounds in [8, 3] {
+            seed(app, rounds: rounds)
+            save(app)
+        }
 
         // 02 集計のハイライト
         openRecordsTab(app)
