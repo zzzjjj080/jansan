@@ -9,7 +9,7 @@ struct ShareValidationTests {
 
     @Test("大小と記号は吸収する")
     func normalizes() {
-        #expect(ShareCrypto.normalize("Act-D 01") == "actd01")
+        #expect(ShareCrypto.normalize("Ta-Ku 01") == "taku01")
         #expect(ShareCrypto.normalize("ＡＢＣ") == "", "全角は落とす")
     }
 
@@ -24,8 +24,8 @@ struct ShareValidationTests {
         #expect(throws: ShareCrypto.ValidationError.idTooLong) {
             try ShareCrypto.validate(id: String(repeating: "a", count: 21), password: "abcd")
         }
-        let ok = try? ShareCrypto.validate(id: "ActD", password: "ActD")
-        #expect(ok?.id == "actd" && ok?.password == "actd")
+        let ok = try? ShareCrypto.validate(id: "TaKu", password: "TaKu")
+        #expect(ok?.id == "taku" && ok?.password == "taku")
     }
 }
 
@@ -34,19 +34,19 @@ struct ShareRecordNameTests {
 
     @Test("大小違いは同じレコードになる")
     func caseInsensitive() {
-        #expect(ShareCrypto.recordName(id: "ActD", password: "PASS") ==
-                ShareCrypto.recordName(id: "actd", password: "pass"))
+        #expect(ShareCrypto.recordName(id: "TaKu", password: "PASS") ==
+                ShareCrypto.recordName(id: "taku", password: "pass"))
     }
 
     @Test("パスワードが違えば別のレコード。IDだけでは辿り着けない")
     func passwordChangesName() {
-        #expect(ShareCrypto.recordName(id: "actd", password: "aaaa") !=
-                ShareCrypto.recordName(id: "actd", password: "aaab"))
+        #expect(ShareCrypto.recordName(id: "taku", password: "aaaa") !=
+                ShareCrypto.recordName(id: "taku", password: "aaab"))
     }
 
     @Test("レコード名は64桁の16進")
     func shape() {
-        let name = ShareCrypto.recordName(id: "actd", password: "actd")
+        let name = ShareCrypto.recordName(id: "taku", password: "taku")
         #expect(name.count == 64)
         #expect(name.allSatisfy { $0.isHexDigit })
     }
@@ -54,23 +54,23 @@ struct ShareRecordNameTests {
     @Test("封をして開けると元に戻る")
     func roundTrip() throws {
         let plain = Data("麻雀の記録".utf8)
-        let sealed = try ShareCrypto.seal(plain, id: "actd", password: "actd")
+        let sealed = try ShareCrypto.seal(plain, id: "taku", password: "taku")
         #expect(sealed != plain)
-        #expect(try ShareCrypto.open(sealed, id: "ActD", password: "ACTD") == plain)
+        #expect(try ShareCrypto.open(sealed, id: "TaKu", password: "TAKU") == plain)
     }
 
     @Test("パスワードが違うと開かない")
     func wrongPassword() throws {
-        let sealed = try ShareCrypto.seal(Data("x".utf8), id: "actd", password: "actd")
+        let sealed = try ShareCrypto.seal(Data("x".utf8), id: "taku", password: "taku")
         #expect(throws: ShareCrypto.CryptoError.cannotOpen) {
-            try ShareCrypto.open(sealed, id: "actd", password: "actx")
+            try ShareCrypto.open(sealed, id: "taku", password: "takx")
         }
     }
 
     @Test("壊れたデータも「開かない」の一言で済ませる")
     func corrupted() {
         #expect(throws: ShareCrypto.CryptoError.cannotOpen) {
-            try ShareCrypto.open(Data([1, 2, 3]), id: "actd", password: "actd")
+            try ShareCrypto.open(Data([1, 2, 3]), id: "taku", password: "taku")
         }
     }
 }
@@ -92,8 +92,8 @@ struct SharedDocumentTests {
     @Test("名前と表示モードと対局が丸ごと往復する")
     func roundTrip() throws {
         let doc = SharedDirectoryDocument(name: "田中宅", decimalMode: true, backup: sampleBackup())
-        let sealed = try doc.sealed(id: "actd", password: "actd")
-        let back = try SharedDirectoryDocument.opened(sealed, id: "actd", password: "actd")
+        let sealed = try doc.sealed(id: "taku", password: "taku")
+        let back = try SharedDirectoryDocument.opened(sealed, id: "taku", password: "taku")
         #expect(back.name == "田中宅")
         #expect(back.decimalMode == true)
         #expect(back.backup.games.count == 1)
@@ -103,9 +103,9 @@ struct SharedDocumentTests {
     @Test("パスワード違いは中身を見せない")
     func wrongPassword() throws {
         let doc = SharedDirectoryDocument(name: "田中宅", decimalMode: false, backup: sampleBackup())
-        let sealed = try doc.sealed(id: "actd", password: "actd")
+        let sealed = try doc.sealed(id: "taku", password: "taku")
         #expect(throws: ShareCrypto.CryptoError.cannotOpen) {
-            try SharedDirectoryDocument.opened(sealed, id: "actd", password: "zzzz")
+            try SharedDirectoryDocument.opened(sealed, id: "taku", password: "zzzz")
         }
     }
 }
