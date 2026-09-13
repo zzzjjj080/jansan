@@ -617,7 +617,8 @@ struct AllStatsView: View {
         let count = data.series.first?.points.count ?? 0
         guard count > 0 else { return [0] }
         let step = Swift.max(1, count / 5)
-        return Array(stride(from: step, through: count, by: step))
+        // 右端に寄りすぎた目盛りは数字が画面の外に切れる（「50」が「5」に見えた）。半目盛りより寄ったら出さない
+        return stride(from: step, through: count, by: step).filter { count - $0 >= Swift.max(1, step / 2) || $0 == step }
     }
 
     private func chart(_ data: Computed) -> some View {
