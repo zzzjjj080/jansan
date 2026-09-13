@@ -140,6 +140,7 @@ struct AllStatsView: View {
                         heading("ハイライト")
                         highlights(data)
                         heading("成績")
+                        latestRecord(data)
                         playerDetailsButton(data)
                         table(data)
                         heading("着順の割合")
@@ -331,16 +332,18 @@ struct AllStatsView: View {
         if let r = reports.max(by: { $0.count(ofRank: 1) < $1.count(ofRank: 1) }) {
             add("最多トップ", "crown.fill", accent: "sparkles", r.name, "\(r.count(ofRank: 1))回")
         }
-        if let r = reports.max(by: { ($0.bestRound ?? .min) < ($1.bestRound ?? .min) }), let best = r.bestRound {
-            add("最高の1局", "star.fill", accent: "sparkle", r.name, StatsFormat.signed(best, decimal),
-                note: StatsFormat.day(r.bestRoundDate))
+        if let r = reports.max(by: { ($0.bestGame ?? .min) < ($1.bestGame ?? .min) }), let best = r.bestGame {
+            add("最高の対局", "trophy.fill", accent: "sparkles", r.name, StatsFormat.signed(best, decimal),
+                note: StatsFormat.day(r.bestGameDate))
         }
         if let r = reports.max(by: { $0.longestTopStreak < $1.longestTopStreak }) {
             add("連続トップ", "flame.fill", accent: "flame.fill", r.name, "\(r.longestTopStreak)連続",
                 note: StatsFormat.day(r.longestTopStreakDate))
         }
+        // 本人の打った回数と、みんなで打った局数を並べる
         if let r = reports.max(by: { $0.rounds < $1.rounds }) {
-            add("皆勤賞", "calendar.badge.checkmark", r.name, "\(r.rounds)局")
+            add("皆勤賞", "calendar.badge.checkmark", r.name, "\(r.rounds)回",
+                note: "全\(data.roundCount)局中の参加回数")
         }
         let regulars = reports.filter { $0.rounds >= Self.minimumRounds }
         if let r = regulars.max(by: { ($0.lastAvoidRate ?? 0) < ($1.lastAvoidRate ?? 0) }) {
@@ -349,7 +352,8 @@ struct AllStatsView: View {
                 note: "\(r.rounds)局中 ラス\(r.lastCount)回")
         }
         if let r = regulars.min(by: { ($0.averageRank ?? .infinity) < ($1.averageRank ?? .infinity) }) {
-            add("平均着順", "medal.fill", accent: "star.fill", r.name, StatsFormat.rank(r.averageRank))
+            add("平均着順", "medal.fill", accent: "star.fill", r.name, StatsFormat.rank(r.averageRank),
+                note: "参加\(r.rounds)回の平均")
         }
         // 卓全体の直近で切る。しばらく来ていない人の昔の好成績を「今」として出さない
         let hot = Report.recentWindow(games: data.selected)
@@ -359,10 +363,10 @@ struct AllStatsView: View {
             add("絶好調", "bolt.fill", accent: "bolt.fill", hot.name, StatsFormat.average(hot.averageScore, decimal),
                 note: "直近\(min(Report.hotWindow, data.roundCount))局の1局平均")
         }
-        // 最高の対局は痛恨の1局の隣（下段の真ん中）。勝ちと負けの記録を並べて見せる（本人の指示）
-        if let r = reports.max(by: { ($0.bestGame ?? .min) < ($1.bestGame ?? .min) }), let best = r.bestGame {
-            add("最高の対局", "trophy.fill", accent: "sparkles", r.name, StatsFormat.signed(best, decimal),
-                note: StatsFormat.day(r.bestGameDate))
+        // 最高の1局は痛恨の1局の隣（下段の真ん中）。1局の最高と最低を並べる（本人の指示）
+        if let r = reports.max(by: { ($0.bestRound ?? .min) < ($1.bestRound ?? .min) }), let best = r.bestRound {
+            add("最高の1局", "star.fill", accent: "sparkle", r.name, StatsFormat.signed(best, decimal),
+                note: StatsFormat.day(r.bestRoundDate))
         }
         if let r = reports.min(by: { ($0.worstRound ?? .max) < ($1.worstRound ?? .max) }), let worst = r.worstRound {
             add("痛恨の1局", "cloud.bolt.rain.fill", r.name, StatsFormat.signed(worst, decimal),
@@ -403,6 +407,61 @@ struct AllStatsView: View {
     }
 
     private static let nameMinWidth: CGFloat = 40
+
+    /// **最近の記録。** 対局日がいちばん新しい記録の合計点だけを小さく見せる。
+    /// 集計の表は期間全体の数字なので、「この前の対局はどうだったか」がすぐ見えない
+    @ViewBuilder
+    private func latestRecord(_ data: Computed) -> some View {
+        if let game = latestGame(data) {
+            let decimal = game.session.decimalMode
+            let ranked = Report.players(games: [game]).enumerated()
+                .sorted { $0.element.total != $1.element.total ? $0.element.total > $1.element.total : $0.offset < $1.offset }
+                .map(\.element)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .accessibilityHidden(true)
+                    Text("最近の記録")
+                        .font(.system(size: 13, weight: .bold))
+                    Spacer(minLength: 4)
+                    Text("\(StatsFormat.day(game.playedAt) ?? "") ・ \(Report.roundCount(games: [game]))局")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Palette.inkDim)
+                }
+                .foregroundStyle(Palette.ink)
+
+                FlowRow(spacing: 8) {
+                    ForEach(ranked) { report in
+                        HStack(spacing: 5) {
+                            Circle().fill(data.color(report.name)).frame(width: 7, height: 7)
+                            Text(report.name)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Palette.ink)
+                                .lineLimit(1)
+                            Text(StatsFormat.signed(report.total, decimal))
+                                .font(.system(size: 14, weight: .bold))
+                                .monospacedDigit()
+                                .foregroundStyle(report.total < 0 ? Palette.negative : Palette.ink)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Palette.surface2, in: Capsule())
+                    }
+                }
+            }
+            .padding(12)
+            .background(Palette.surface, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Palette.line))
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("latestRecord")
+        }
+    }
+
+    /// 対局日がいちばん新しい記録。`selected` は対局日の古い順で、同じ日付どうしは保存の新しい順を保っている
+    private func latestGame(_ data: Computed) -> GameForStats? {
+        guard let last = data.selected.last else { return nil }
+        return data.selected.first { $0.playedAt == last.playedAt }
+    }
 
     /// 表の行をタップしても開けるが、それに気づきにくい。入口をはっきり置く
     private func playerDetailsButton(_ data: Computed) -> some View {

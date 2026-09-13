@@ -184,6 +184,7 @@ final class NewFeaturesUITests: XCTestCase {
         XCTAssertTrue(app.buttons["最近30日"].exists, "「最近30日」が無い")
         XCTAssertFalse(app.buttons["先月"].exists, "外したはずの期間が残っている")
         XCTAssertFalse(app.staticTexts["いちばん安定"].exists, "ばらつきのハイライトが残っている")
+        XCTAssertTrue(app.descendants(matching: .any)["latestRecord"].exists, "最近の記録が出ていない")
         // 枠は読み上げ用に1つにまとめているので、見出しで始まる要素を探す
         for title in ["最多トップ", "皆勤賞", "痛恨の1局"] {
             let card = app.descendants(matching: .any)
