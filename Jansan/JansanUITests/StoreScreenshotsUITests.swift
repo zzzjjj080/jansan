@@ -80,7 +80,8 @@ final class StoreScreenshotsUITests: XCTestCase {
         save(app)
 
         // 集計に数字が並ぶよう、局数の違う記録をあと2回ぶん残す（勝つ人が回ごとに変わる）
-        for rounds in [8, 3] {
+        // 開発用のボタンは 3・12・30局の3つだけ。無い局数を指定すると「ボタンが無い」で落ちる
+        for rounds in [3, 12] {
             seed(app, rounds: rounds)
             save(app)
         }
