@@ -368,13 +368,13 @@ struct AllStatsView: View {
         return items
     }
 
-    /// 3列×3段。**いまは試作で、1枠ごとに違うデザインにしてある。** 見比べて1つに決める
+    /// 3列×3段。9つを1画面の上半分で見渡せるようにする
     private func highlights(_ data: Computed) -> some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
                   spacing: 8) {
-            ForEach(Array(highlightItems(data).enumerated()), id: \.element.id) { index, item in
+            ForEach(highlightItems(data)) { item in
                 HighlightCard(title: item.id, symbol: item.symbol, accent: item.accent, name: item.name,
-                              value: item.value, note: item.note, color: item.color, design: index)
+                              value: item.value, note: item.note, color: item.color)
             }
         }
     }
@@ -711,17 +711,13 @@ private extension Array where Element: Hashable {
     }
 }
 
-// MARK: - ハイライトの枠（試作の9種類・2回目）
+// MARK: - ハイライトの枠
 
-/// ハイライト1枠。**大きさはどのデザインでも同じ。** `design` の番号で見た目だけを変える。
+/// ハイライト1枠。**暗い地に、その人の色の四隅の金具。項目ならではの絵を大きく透かす。**
 ///
-/// 2回目の試作の方針（本人の感想から）：
-/// - どれも**枠がある**（1回目の「縁取り」「ネオン」が好評）
-/// - どれにも**項目ならではの絵**を入れる（1回目の「痛恨の1局」の雷雨が好評）
-/// - **派手なもの**も混ぜる（1回目の「ネオン」が好評）
-///
-/// 0 ネオン額縁 / 1 トレカ / 2 バッジ / 3 コーナー金具 / 4 グラデーション縁 /
-/// 5 スタンプ / 6 光輪 / 7 内枠 / 8 透かし＋縁
+/// 試作を2回見比べて本人が選んだ形（2026-09-13。2回目の④「コーナー金具」）。
+/// 好評だった点：枠がある・派手に光る・項目ごとの絵がある。
+/// 地はライトモードでも暗いまま。明るい地だと金具が光って見えない
 private struct HighlightCard: View {
     let title: String
     let symbol: String
@@ -730,170 +726,46 @@ private struct HighlightCard: View {
     let value: String
     let note: String?
     let color: Color
-    let design: Int
 
     static let height: CGFloat = 124
-    /// 塗りつぶした面の上の濃い文字
+    /// 塗りつぶした面の上の濃い文字（着順の割合のグラフでも使う）
     static let darkInk = Color(red: 0.06, green: 0.08, blue: 0.06)
-    /// 暗い地の色。ライトモードでも暗いまま（ネオン系は暗い地でないと光って見えない）
     static let night = Color(red: 0.05, green: 0.06, blue: 0.07)
 
     var body: some View {
-        content
-            .frame(maxWidth: .infinity)
-            .frame(height: Self.height)
-            // 読み上げは見出しから始める（絵は読ませない。UIテストもこの順で探す）
-            .accessibilityElement(children: .combine)
-    }
-
-    @ViewBuilder private var content: some View {
-        switch design % 9 {
-        case 0: neonFrame
-        case 1: tradingCard
-        case 2: badge
-        case 3: brackets
-        case 4: gradientRing
-        case 5: stamp
-        case 6: halo
-        case 7: innerFrame
-        default: watermarkFrame
-        }
-    }
-
-    // MARK: 部品
-
-    private func illustration(size: CGFloat, color: Color) -> some View {
-        Illustration(symbol: symbol, accent: accent, size: size, color: color)
-    }
-
-    private func titleText(_ ink: Color) -> some View {
-        Text(title)
-            .font(.system(size: 11, weight: .heavy))
-            .foregroundStyle(ink)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-    }
-
-    private func valueText(_ ink: Color, size: CGFloat = 26) -> some View {
-        Text(value)
-            .font(.system(size: size, weight: .black))
-            .monospacedDigit()
-            .foregroundStyle(ink)
-            .lineLimit(1)
-            .minimumScaleFactor(0.5)
-    }
-
-    private func nameText(_ ink: Color) -> some View {
-        Text(name)
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(ink)
-            .lineLimit(1)
-            .minimumScaleFactor(0.6)
-    }
-
-    /// 日付の無い枠も同じ段組みにして、値と名前の位置をそろえる
-    private func noteText(_ ink: Color) -> some View {
-        Text(note ?? "–")
-            .font(.system(size: 9.5, weight: .semibold))
-            .foregroundStyle(ink)
-            .lineLimit(1)
-            .minimumScaleFactor(0.6)
-            .opacity(note == nil ? 0 : 1)
-            .accessibilityHidden(note == nil)
-    }
-
-    // MARK: 0 ネオン額縁
-
-    private var neonFrame: some View {
         VStack(spacing: 4) {
-            titleText(color)
-            valueText(color)
-                .shadow(color: color.opacity(0.9), radius: 6)
-            nameText(.white)
-            noteText(.white.opacity(0.6))
+            Text(title)
+                .font(.system(size: 11, weight: .heavy))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(value)
+                .font(.system(size: 26, weight: .black))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+            Text(name)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            // 日付の無い枠も同じ段組みにして、値と名前の位置をそろえる
+            Text(note ?? "–")
+                .font(.system(size: 9.5, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.6))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .opacity(note == nil ? 0 : 1)
+                .accessibilityHidden(note == nil)
         }
         .padding(.horizontal, 10)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            ZStack(alignment: .bottomTrailing) {
-                Self.night
-                illustration(size: 52, color: color.opacity(0.25))
-                    .offset(x: 6, y: 6)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-        }
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(color, lineWidth: 2))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(color.opacity(0.45), lineWidth: 1).padding(4))
-        .shadow(color: color.opacity(0.6), radius: 8)
-    }
-
-    // MARK: 1 トレカ
-
-    private var tradingCard: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 4) {
-                Illustration(symbol: symbol, accent: nil, size: 13, color: Self.darkInk)
-                titleText(Self.darkInk)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 30)
-            .background(color)
-
-            VStack(spacing: 3) {
-                valueText(Palette.ink, size: 24)
-                nameText(color)
-                noteText(Palette.inkDim)
-            }
-            .padding(.horizontal, 6)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background {
-                ZStack(alignment: .bottomTrailing) {
-                    Palette.surface
-                    illustration(size: 40, color: color.opacity(0.14))
-                        .offset(x: 6, y: 6)
-                }
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(color, lineWidth: 3))
-    }
-
-    // MARK: 2 バッジ
-
-    private var badge: some View {
-        VStack(spacing: 3) {
-            titleText(Palette.inkDim)
-            ZStack {
-                Circle().fill(color)
-                Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1.5).padding(2)
-                Illustration(symbol: symbol, accent: nil, size: 14, color: Self.darkInk)
-            }
-            .frame(width: 32, height: 32)
-            valueText(Palette.ink, size: 22)
-            nameText(color)
-            noteText(Palette.inkDim)
-        }
-        .padding(.horizontal, 6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(color, lineWidth: 2))
-    }
-
-    // MARK: 3 コーナー金具
-
-    private var brackets: some View {
-        VStack(spacing: 4) {
-            titleText(color)
-            valueText(.white)
-            nameText(color)
-            noteText(.white.opacity(0.6))
-        }
-        .padding(.horizontal, 10)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
+        .frame(height: Self.height)
         .background {
             ZStack {
                 Self.night
-                illustration(size: 60, color: color.opacity(0.16))
+                Illustration(symbol: symbol, accent: accent, size: 60, color: color.opacity(0.16))
             }
             .clipShape(RoundedRectangle(cornerRadius: 6))
         }
@@ -903,143 +775,8 @@ private struct HighlightCard: View {
                 .padding(2)
         )
         .shadow(color: color.opacity(0.5), radius: 6)
-    }
-
-    // MARK: 4 グラデーション縁
-
-    private var gradientRing: some View {
-        VStack(spacing: 4) {
-            titleText(Palette.inkDim)
-            valueText(Palette.ink)
-            nameText(Palette.ink)
-            noteText(Palette.inkDim)
-        }
-        .padding(.horizontal, 8)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            ZStack(alignment: .bottomTrailing) {
-                Palette.surface
-                illustration(size: 44, color: color.opacity(0.3))
-                    .offset(x: 4, y: 4)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(
-                    AngularGradient(colors: [color, .white.opacity(0.9), color,
-                                             color.mix(with: .black, by: 0.4), color],
-                                    center: .center),
-                    lineWidth: 3
-                )
-        )
-    }
-
-    // MARK: 5 スタンプ
-
-    private var stamp: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            titleText(color)
-                .padding(.trailing, 36)
-            Spacer(minLength: 0)
-            valueText(Palette.ink)
-            nameText(Palette.ink)
-            noteText(Palette.inkDim)
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background {
-            ZStack {
-                Palette.surface
-                color.opacity(0.14)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-        }
-        .overlay(alignment: .topTrailing) {
-            ZStack {
-                Circle().strokeBorder(color, lineWidth: 2)
-                Circle().strokeBorder(color.opacity(0.6), lineWidth: 1).padding(3)
-                Illustration(symbol: symbol, accent: nil, size: 16, color: color)
-            }
-            .frame(width: 40, height: 40)
-            .rotationEffect(.degrees(-12))
-            .padding(6)
-        }
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(color, style: StrokeStyle(lineWidth: 2, dash: [5, 3])))
-    }
-
-    // MARK: 6 光輪
-
-    private var halo: some View {
-        VStack(spacing: 3) {
-            titleText(.white.opacity(0.85))
-            illustration(size: 20, color: color)
-                .shadow(color: color, radius: 6)
-            valueText(.white, size: 22)
-                .shadow(color: color.opacity(0.9), radius: 5)
-            nameText(color)
-            noteText(.white.opacity(0.6))
-        }
-        .padding(.horizontal, 6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            ZStack {
-                Self.night
-                RadialGradient(colors: [color.opacity(0.6), .clear], center: .top, startRadius: 2, endRadius: 95)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-        }
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(color.opacity(0.85), lineWidth: 1.5))
-        .shadow(color: color.opacity(0.45), radius: 7)
-    }
-
-    // MARK: 7 内枠
-
-    private var innerFrame: some View {
-        VStack(spacing: 4) {
-            titleText(Self.darkInk.opacity(0.75))
-            valueText(Self.darkInk)
-            nameText(Self.darkInk)
-            noteText(Self.darkInk.opacity(0.7))
-        }
-        .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            ZStack(alignment: .bottomTrailing) {
-                color
-                LinearGradient(colors: [.white.opacity(0.25), .clear], startPoint: .top, endPoint: .center)
-                illustration(size: 50, color: Self.darkInk.opacity(0.16))
-                    .offset(x: 6, y: 6)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-        }
-        .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(.white.opacity(0.8), lineWidth: 1.5).padding(5))
-        .shadow(color: color.opacity(0.4), radius: 6, y: 3)
-    }
-
-    // MARK: 8 透かし＋縁
-
-    private var watermarkFrame: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            titleText(color)
-            Spacer(minLength: 0)
-            valueText(Palette.ink, size: 28)
-            nameText(Palette.ink)
-            noteText(Palette.inkDim)
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background {
-            ZStack(alignment: .bottomTrailing) {
-                Palette.surface
-                color.opacity(0.16)
-                illustration(size: 62, color: color.opacity(0.35))
-                    .offset(x: 12, y: 12)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-        }
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(color, lineWidth: 1.5))
-        .shadow(color: color.opacity(0.45), radius: 6)
+        // 読み上げは見出しから始める（絵は読ませない。UIテストもこの順で探す）
+        .accessibilityElement(children: .combine)
     }
 }
 
