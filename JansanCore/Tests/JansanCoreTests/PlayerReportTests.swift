@@ -135,6 +135,21 @@ struct PlayerReportSequenceTests {
         #expect(report("D", in: reports).plusGames == 0)
     }
 
+    @Test("最高・最低の1局と対局に、それを出した日が付く。同じ点なら先の日")
+    func recordDates() {
+        let first = game(abcd, [[50, -10, -15, -25]], day: 1)          // A 最高の1局 +50（1日目）
+        let second = game(abcd, [[50, 10, -20, -40], [-60, 20, 20, 20]], day: 2)  // A +50 は同点、-60 が最低
+        let a = report("A", in: Report.players(games: [second, first]))
+        #expect(a.bestRound == 50)
+        #expect(a.bestRoundDate == first.playedAt)
+        #expect(a.worstRound == -60)
+        #expect(a.worstRoundDate == second.playedAt)
+        #expect(a.bestGame == 50)
+        #expect(a.bestGameDate == first.playedAt)
+        #expect(a.worstGame == -10)
+        #expect(a.worstGameDate == second.playedAt)
+    }
+
     @Test("最近の成績は直近10局だけ")
     func recentForm() {
         // A は最初の2局だけラス、あとの10局はトップ

@@ -58,6 +58,9 @@ struct HistoryView: View {
                     List {
                         ForEach(shown) { record in
                             row(record)
+                                // 受け取った記録は消せない。スワイプの削除を出すと、断っても行だけ消えて
+                                // 一覧の数が食い違う（RecordsView と同じ理由）
+                                .deleteDisabled(!directory.isEditable)
                         }
                         .onDelete(perform: delete)
                     }

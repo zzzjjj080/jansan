@@ -35,8 +35,7 @@ struct PlayerStatsView: View {
         .listStyle(.insetGrouped)
         // 集計画面と同じ書体にそろえる
         .fontDesign(.rounded)
-        .navigationTitle(name)
-        .navigationBarTitleDisplayMode(.inline)
+        // 題名は PlayerPagerView が付ける。ページごとに付けると、送った先の題名と食い違う
     }
 
     // MARK: - 概要
@@ -118,8 +117,8 @@ struct PlayerStatsView: View {
     private func scoreSection(_ r: PlayerReport) -> some View {
         Section {
             item("プラスで終えた局", StatsFormat.percent(r.plusRate))
-            item("最高", r.bestRound.map { StatsFormat.signed($0, decimalMode) } ?? "–")
-            item("最低", r.worstRound.map { StatsFormat.signed($0, decimalMode) } ?? "–",
+            item("最高", r.bestRound.map { dated(StatsFormat.signed($0, decimalMode), r.bestRoundDate) } ?? "–")
+            item("最低", r.worstRound.map { dated(StatsFormat.signed($0, decimalMode), r.worstRoundDate) } ?? "–",
                  negative: (r.worstRound ?? 0) < 0)
         } header: {
             Text("1局の点数")
@@ -146,8 +145,8 @@ struct PlayerStatsView: View {
         Section {
             item("対局のトップ", "\(r.gameTops)回（\(StatsFormat.percent(r.gameTopRate))）")
             item("プラスで終えた対局", "\(r.plusGames)回（\(StatsFormat.percent(r.gamePlusRate))）")
-            item("最高の対局", r.bestGame.map { StatsFormat.signed($0, decimalMode) } ?? "–")
-            item("最低の対局", r.worstGame.map { StatsFormat.signed($0, decimalMode) } ?? "–",
+            item("最高の対局", r.bestGame.map { dated(StatsFormat.signed($0, decimalMode), r.bestGameDate) } ?? "–")
+            item("最低の対局", r.worstGame.map { dated(StatsFormat.signed($0, decimalMode), r.worstGameDate) } ?? "–",
                  negative: (r.worstGame ?? 0) < 0)
         } header: {
             Text("対局ごと")
@@ -220,6 +219,12 @@ struct PlayerStatsView: View {
         }
     }
 
+    /// 記録を出した日を後ろに添える。日付が無ければ値だけ
+    private func dated(_ value: String, _ date: Date?) -> String {
+        guard let day = StatsFormat.day(date) else { return value }
+        return "\(value)（\(day)）"
+    }
+
     private func streak(_ length: Int, _ date: Date?) -> String {
         guard length > 0, let day = StatsFormat.day(date) else { return "\(length)局" }
         return "\(length)局（\(day)）"
@@ -234,11 +239,98 @@ struct PlayerStatsView: View {
     }
 }
 
+/// 個人成績を1人ずつ横に送って見る。集計の「個人成績の詳細を見る」と、表の行から開く。
+///
+/// **表と同じ並び（合計の多い順）で送る。** 誰が何人目かを上の帯に出し、点をタップするとその人へ飛ぶ
+struct PlayerPagerView: View {
+    let names: [String]
+    let games: [GameForStats]
+    let decimalMode: Bool
+    let seats: Int
+    let colors: [String: Color]
+    @State private var selection: String
+
+    init(names: [String], games: [GameForStats], decimalMode: Bool, seats: Int,
+         colors: [String: Color], start: String) {
+        self.names = names
+        self.games = games
+        self.decimalMode = decimalMode
+        self.seats = seats
+        self.colors = colors
+        _selection = State(initialValue: names.contains(start) ? start : (names.first ?? start))
+    }
+
+    private var index: Int { names.firstIndex(of: selection) ?? 0 }
+
+    var body: some View {
+        TabView(selection: $selection) {
+            ForEach(names, id: \.self) { name in
+                PlayerStatsView(name: name, games: games, decimalMode: decimalMode,
+                                seats: seats, color: colors[name] ?? Palette.accent)
+                    .tag(name)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .background(Palette.bg)
+        .safeAreaInset(edge: .top, spacing: 0) { pageBar }
+        .navigationTitle(selection)
+        .navigationBarTitleDisplayMode(.inline)
+        .fontDesign(.rounded)
+        .sensoryFeedback(.selection, trigger: selection)
+    }
+
+    private var pageBar: some View {
+        HStack(spacing: 10) {
+            Button { move(-1) } label: { Image(systemName: "chevron.left") }
+                .disabled(index == 0)
+                .accessibilityLabel("前の人")
+            Spacer(minLength: 0)
+            HStack(spacing: 6) {
+                ForEach(names, id: \.self) { name in
+                    Circle()
+                        .fill(colors[name] ?? Palette.accent)
+                        .frame(width: name == selection ? 10 : 7, height: name == selection ? 10 : 7)
+                        .opacity(name == selection ? 1 : 0.45)
+                        .contentShape(Rectangle().inset(by: -6))
+                        .onTapGesture { withAnimation { selection = name } }
+                        .accessibilityHidden(true)
+                }
+            }
+            Text("\(index + 1) / \(names.count)")
+                .font(.system(size: 12, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(Palette.inkDim)
+                .accessibilityIdentifier("playerPageIndicator")
+            Spacer(minLength: 0)
+            Button { move(1) } label: { Image(systemName: "chevron.right") }
+                .disabled(index >= names.count - 1)
+                .accessibilityLabel("次の人")
+        }
+        .font(.system(size: 15, weight: .bold))
+        .foregroundStyle(Palette.accent)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .background(Palette.bg)
+    }
+
+    private func move(_ step: Int) {
+        let next = index + step
+        guard names.indices.contains(next) else { return }
+        withAnimation { selection = names[next] }
+    }
+}
+
 /// 集計の数字の書き方。集計画面と詳細で同じ書き方にする
 enum StatsFormat {
     static func percent(_ value: Double?) -> String {
         guard let value else { return "–" }
         return "\(Int((value * 100).rounded()))%"
+    }
+
+    /// 表のマス用の率。見出しに「率」と書くので％は付けない
+    static func rateNumber(_ value: Double?) -> String {
+        guard let value else { return "–" }
+        return "\(Int((value * 100).rounded()))"
     }
 
     static func score(_ value: Int, _ decimalMode: Bool) -> String {

@@ -22,6 +22,9 @@ public struct PlayerReport: Equatable, Sendable, Identifiable {
     public let plusRounds: Int
     public let bestRound: Int?
     public let worstRound: Int?
+    /// 最高・最低の1局を出した記録の対局日。同じ点なら先に出した日
+    public let bestRoundDate: Date?
+    public let worstRoundDate: Date?
     /// 連続記録は**1回の記録（その日の表）の中だけで数える。** 次の記録に移ると途切れる
     public let longestTopStreak: Int
     public let longestLastStreak: Int
@@ -37,6 +40,9 @@ public struct PlayerReport: Equatable, Sendable, Identifiable {
     public let plusGames: Int
     public let bestGame: Int?
     public let worstGame: Int?
+    /// 最高・最低の対局の対局日。同じ点なら先に出した日
+    public let bestGameDate: Date?
+    public let worstGameDate: Date?
     /// 直近の局だけの成績。調子を見る
     public let recent: RecentForm?
 
@@ -208,7 +214,7 @@ public enum Report {
                 lhs.value != rhs.value ? lhs.value > rhs.value : lhs.key < rhs.key
             })?.key else { continue }
             for (column, total) in gameTotals {
-                tally[players[column]]!.addGame(total: total, isTop: column == top)
+                tally[players[column]]!.addGame(total: total, isTop: column == top, date: game.playedAt)
             }
         }
 
@@ -251,6 +257,7 @@ private struct Tally {
     var rankCounts: [Int] = []
     var lastCount = 0, plusRounds = 0
     var best: Int?, worst: Int?
+    var bestDate: Date?, worstDate: Date?
     var topStreak = 0, lastStreak = 0, noLastStreak = 0
     var longestTop = 0, longestLast = 0, longestNoLast = 0
     var topDate: Date?, lastDate: Date?, noLastDate: Date?
@@ -258,6 +265,7 @@ private struct Tally {
     var currentGame = -1
     var gameTops = 0, plusGames = 0
     var bestGame: Int?, worstGame: Int?
+    var bestGameDate: Date?, worstGameDate: Date?
     var history: [(rank: Int, value: Int)] = []
 
     mutating func addRound(rank: Int, seats: Int, value: Int, game: Int, date: Date) {
@@ -280,8 +288,9 @@ private struct Tally {
         let isLast = seats >= 2 && rank == seats
         if isLast { lastCount += 1 }
         if value > 0 { plusRounds += 1 }
-        best = Swift.max(best ?? value, value)
-        worst = Swift.min(worst ?? value, value)
+        // 同じ点なら先に出した日を残す
+        if best == nil || value > best! { best = value; bestDate = date }
+        if worst == nil || value < worst! { worst = value; worstDate = date }
 
         topStreak = rank == 1 ? topStreak + 1 : 0
         lastStreak = isLast ? lastStreak + 1 : 0
@@ -294,12 +303,12 @@ private struct Tally {
         history.append((rank: rank, value: value))
     }
 
-    mutating func addGame(total: Int, isTop: Bool) {
+    mutating func addGame(total: Int, isTop: Bool, date: Date) {
         games += 1
         if isTop { gameTops += 1 }
         if total > 0 { plusGames += 1 }
-        bestGame = Swift.max(bestGame ?? total, total)
-        worstGame = Swift.min(worstGame ?? total, total)
+        if bestGame == nil || total > bestGame! { bestGame = total; bestGameDate = date }
+        if worstGame == nil || total < worstGame! { worstGame = total; worstGameDate = date }
     }
 
     func report(name: String) -> PlayerReport {
@@ -312,12 +321,13 @@ private struct Tally {
         return PlayerReport(
             name: name, games: games, rounds: rounds, total: total,
             rankCounts: rankCounts, lastCount: lastCount, plusRounds: plusRounds,
-            bestRound: best, worstRound: worst,
+            bestRound: best, worstRound: worst, bestRoundDate: bestDate, worstRoundDate: worstDate,
             longestTopStreak: longestTop, longestLastStreak: longestLast,
             longestNoLastStreak: longestNoLast,
             longestTopStreakDate: topDate, longestLastStreakDate: lastDate,
             longestNoLastStreakDate: noLastDate,
             gameTops: gameTops, plusGames: plusGames, bestGame: bestGame, worstGame: worstGame,
+            bestGameDate: bestGameDate, worstGameDate: worstGameDate,
             recent: recent
         )
     }

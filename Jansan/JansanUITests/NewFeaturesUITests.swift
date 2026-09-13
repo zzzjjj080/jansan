@@ -199,14 +199,25 @@ final class NewFeaturesUITests: XCTestCase {
         }
         attach(app, "着順の割合")
 
-        // 名前をタップすると、1人ぶんの詳しい成績と相性。グラフより上にあるので送り戻す
-        let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'statsRow-'")).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 10), "成績の行が無い")
-        for _ in 0..<6 where !row.isHittable { app.swipeDown() }
-        XCTAssertTrue(row.isHittable, "成績の行に届かない")
-        row.tap()
+        // 「個人成績の詳細を見る」から開く。グラフより上にあるので送り戻す
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'statsRow-'"))
+                        .firstMatch.exists, "成績の行が無い")
+        let open = app.buttons["openPlayerDetails"]
+        XCTAssertTrue(open.waitForExistence(timeout: 10), "個人成績の詳細の入口が無い")
+        for _ in 0..<6 where !open.isHittable { app.swipeDown() }
+        XCTAssertTrue(open.isHittable, "個人成績の詳細の入口に届かない")
+        open.tap()
         XCTAssertTrue(app.staticTexts["着順"].waitForExistence(timeout: 10), "詳しい成績が開かない")
+        let indicator = app.staticTexts["playerPageIndicator"]
+        XCTAssertTrue(indicator.waitForExistence(timeout: 5), "何人目かが出ていない")
+        XCTAssertTrue(indicator.label.hasPrefix("1 /"), "最初の人から始まっていない: \(indicator.label)")
         attach(app, "1人の詳しい成績")
+
+        // 横にスワイプすると次の人
+        app.swipeLeft()
+        expectation(for: NSPredicate(format: "label BEGINSWITH '2 /'"), evaluatedWith: indicator)
+        waitForExpectations(timeout: 5)
+        attach(app, "2人目の詳しい成績")
         let matchup = app.staticTexts["相性"]
         for _ in 0..<8 where !matchup.exists { app.swipeUp() }
         XCTAssertTrue(matchup.exists, "相性が無い")

@@ -3,6 +3,11 @@ import SwiftData
 import Charts
 import JansanCore
 
+/// 個人成績の画面を、誰のページから開くか
+private struct PlayerPage: Hashable {
+    let start: String
+}
+
 /// 保存した記録をまたいだ集計。ディレクトリごとに開く。
 ///
 /// **打ち方（三麻/四麻）で必ず分ける。** 着順の分母が変わるので、混ぜた数字は比べられない。
@@ -135,6 +140,7 @@ struct AllStatsView: View {
                         heading("ハイライト")
                         highlights(data)
                         heading("成績")
+                        playerDetailsButton(data)
                         table(data)
                         heading("着順の割合")
                         rankChart(data)
@@ -154,9 +160,13 @@ struct AllStatsView: View {
             .background(Palette.bg)
             .navigationTitle(directory.map { "\($0.name)の集計" } ?? "全記録のビュー")
             .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: String.self) { name in
-                PlayerStatsView(name: name, games: data.selected, decimalMode: data.decimalMode,
-                                seats: data.seats, color: data.color(name))
+            .navigationDestination(for: PlayerPage.self) { page in
+                PlayerPagerView(
+                    names: data.ranked.map(\.name), games: data.selected,
+                    decimalMode: data.decimalMode, seats: data.seats,
+                    colors: Dictionary(uniqueKeysWithValues: data.ranked.map { ($0.name, data.color($0.name)) }),
+                    start: page.start
+                )
             }
             .toolbar {
                 ToolbarItem(placement: .navigation) {
@@ -295,10 +305,12 @@ struct AllStatsView: View {
 
     private struct Highlight: Identifiable {
         let id: String
+        /// 項目ならではの絵。主の記号と、添える小さな記号
         let symbol: String
+        let accent: String?
         let name: String
         let value: String
-        /// 名前の下に添える一言（連続トップを出した日など）
+        /// 名前の下に添える一言（その記録を出した日など）
         let note: String?
         let color: Color
     }
@@ -310,150 +322,131 @@ struct AllStatsView: View {
         let reports = data.reports
         let decimal = data.decimalMode
         var items: [Highlight] = []
-        func add(_ title: String, _ symbol: String, _ name: String, _ value: String, note: String? = nil) {
-            items.append(Highlight(id: title, symbol: symbol, name: name, value: value,
+        func add(_ title: String, _ symbol: String, accent: String? = nil,
+                 _ name: String, _ value: String, note: String? = nil) {
+            items.append(Highlight(id: title, symbol: symbol, accent: accent, name: name, value: value,
                                    note: note, color: data.color(name)))
         }
 
         if let r = reports.max(by: { $0.count(ofRank: 1) < $1.count(ofRank: 1) }) {
-            add("最多トップ", "crown.fill", r.name, "\(r.count(ofRank: 1))回")
+            add("最多トップ", "crown.fill", accent: "sparkles", r.name, "\(r.count(ofRank: 1))回")
         }
         if let r = reports.max(by: { ($0.bestRound ?? .min) < ($1.bestRound ?? .min) }), let best = r.bestRound {
-            add("最高の1局", "star.fill", r.name, StatsFormat.signed(best, decimal))
+            add("最高の1局", "star.fill", accent: "sparkle", r.name, StatsFormat.signed(best, decimal),
+                note: StatsFormat.day(r.bestRoundDate))
         }
         if let r = reports.max(by: { $0.longestTopStreak < $1.longestTopStreak }) {
-            add("連続トップ", "flame.fill", r.name, "\(r.longestTopStreak)連続",
+            add("連続トップ", "flame.fill", accent: "flame.fill", r.name, "\(r.longestTopStreak)連続",
                 note: StatsFormat.day(r.longestTopStreakDate))
         }
         if let r = reports.max(by: { ($0.bestGame ?? .min) < ($1.bestGame ?? .min) }), let best = r.bestGame {
-            add("最高の対局", "trophy.fill", r.name, StatsFormat.signed(best, decimal))
+            add("最高の対局", "trophy.fill", accent: "sparkles", r.name, StatsFormat.signed(best, decimal),
+                note: StatsFormat.day(r.bestGameDate))
         }
         let regulars = reports.filter { $0.rounds >= Self.minimumRounds }
         if let r = regulars.max(by: { ($0.lastAvoidRate ?? 0) < ($1.lastAvoidRate ?? 0) }) {
-            add("ラス回避率", "shield.fill", r.name, StatsFormat.percent(r.lastAvoidRate))
+            add("ラス回避率", "checkmark.shield.fill", r.name, StatsFormat.percent(r.lastAvoidRate))
         }
         if let r = regulars.min(by: { ($0.averageRank ?? .infinity) < ($1.averageRank ?? .infinity) }) {
-            add("平均着順", "medal.fill", r.name, StatsFormat.rank(r.averageRank))
+            add("平均着順", "medal.fill", accent: "star.fill", r.name, StatsFormat.rank(r.averageRank))
         }
         // 卓全体の直近で切る。しばらく来ていない人の昔の好成績を「今」として出さない
         let hot = Report.recentWindow(games: data.selected)
             .filter { $0.rounds >= Self.minimumRounds }
             .max { $0.averageScore < $1.averageScore }
         if let hot {
-            add("絶好調", "bolt.fill", hot.name, StatsFormat.average(hot.averageScore, decimal),
+            add("絶好調", "bolt.fill", accent: "bolt.fill", hot.name, StatsFormat.average(hot.averageScore, decimal),
                 note: "直近\(min(Report.hotWindow, data.roundCount))局の1局平均")
         }
         if let r = reports.max(by: { $0.rounds < $1.rounds }) {
-            add("皆勤賞", "calendar", r.name, "\(r.rounds)局")
+            add("皆勤賞", "calendar.badge.checkmark", r.name, "\(r.rounds)局")
         }
         if let r = reports.min(by: { ($0.worstRound ?? .max) < ($1.worstRound ?? .max) }), let worst = r.worstRound {
-            add("痛恨の1局", "cloud.bolt.rain.fill", r.name, StatsFormat.signed(worst, decimal))
+            add("痛恨の1局", "cloud.bolt.rain.fill", r.name, StatsFormat.signed(worst, decimal),
+                note: StatsFormat.day(r.worstRoundDate))
         }
         return items
     }
 
-    /// 3列×3段。9つを1画面の上半分で見渡せるようにする
+    /// 3列×3段。**いまは試作で、1枠ごとに違うデザインにしてある。** 見比べて1つに決める
     private func highlights(_ data: Computed) -> some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3),
                   spacing: 8) {
-            ForEach(highlightItems(data)) { item in
-                card(item)
+            ForEach(Array(highlightItems(data).enumerated()), id: \.element.id) { index, item in
+                HighlightCard(title: item.id, symbol: item.symbol, accent: item.accent, name: item.name,
+                              value: item.value, note: item.note, color: item.color, design: index)
             }
         }
     }
 
-    /// 塗りつぶした枠の上の文字。人の色はどれも明るめなので、白より濃い色の方が読める
-    private static let onColorInk = Color(red: 0.06, green: 0.08, blue: 0.06)
-
-    /// **枠をその人の色で塗り、文字は中央にそろえる。**
-    /// 高さを固定して、日付の有無で枠の大きさがばらつかないようにする
-    private func card(_ item: Highlight) -> some View {
-        VStack(spacing: 5) {
-            HStack(spacing: 3) {
-                Image(systemName: item.symbol)
-                    .font(.system(size: 9, weight: .black))
-                    .accessibilityHidden(true)
-                Text(item.id)
-                    .font(.system(size: 11, weight: .heavy))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .foregroundStyle(Self.onColorInk.opacity(0.7))
-
-            Text(item.value)
-                .font(.system(size: 26, weight: .black))
-                .monospacedDigit()
-                .foregroundStyle(Self.onColorInk)
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-
-            Text(item.name)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Self.onColorInk)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
-                .background(.white.opacity(0.35), in: Capsule())
-
-            // 日付の無い枠も同じ段組みにして、値と名前の位置をそろえる
-            Text(item.note ?? "–")
-                .font(.system(size: 9.5, weight: .semibold))
-                .foregroundStyle(Self.onColorInk.opacity(0.7))
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .opacity(item.note == nil ? 0 : 1)
-                .accessibilityHidden(item.note == nil)
-        }
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity)
-        .frame(height: 124)
-        .padding(.horizontal, 6)
-        .background {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(item.color)
-                // 上から薄い光を当てて、平らな色面にしない
-                .overlay(
-                    LinearGradient(colors: [.white.opacity(0.28), .white.opacity(0)],
-                                   startPoint: .top, endPoint: .center)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                )
-                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.25), lineWidth: 1))
-                .shadow(color: item.color.opacity(0.35), radius: 6, y: 3)
-        }
-        .accessibilityElement(children: .combine)
-    }
+    /// 塗りつぶした面の上の文字。人の色はどれも明るめなので、白より濃い色の方が読める
+    private static let onColorInk = HighlightCard.darkInk
 
     // MARK: - 成績表
 
-    /// 列ごとに、いちばん長い値（「+37.6」「100%」など）が14ptで収まる幅を決め打ちにする。
+    /// 列ごとに、いちばん長い値（「+37.6」「100」など）が14ptで収まる幅を決め打ちにする。
     /// **等分にしない。** 等分だと長い値のマスだけ字が縮み、同じ行で字の大きさがそろわない
     private static let columns: [(title: String, width: CGFloat)] = [
-        ("局", 28), ("合計", 48), ("平均", 42), ("平着", 36), ("トップ", 38), ("連対", 38), ("ラス", 36),
+        ("局", 28), ("合計", 48), ("平均", 42), ("平着", 38), ("トップ率", 42), ("連対率", 40), ("ラス率", 40),
     ]
     private static let chevronWidth: CGFloat = 12
 
-    /// 横に送らずに1画面に収める。名前の残りの幅を列で等分する
+    /// 名前の欄の**上限**。いちばん長い名前が入る幅。余った幅を名前に回すと、短い名前のとき局数との間が空きすぎる。
+    /// **上限であって固定ではない。** 固定にすると長い名前（「プレイヤー2」など）で表が画面より広くなり、
+    /// 集計の画面ごと横にはみ出して左右が切れた。足りないときは名前の欄だけが縮み、名前の字を縮めて入れる
+    private func nameWidth(_ data: Computed) -> CGFloat {
+        let longest = data.ranked.map { $0.name.count }.max() ?? 2
+        return min(90, max(46, CGFloat(longest) * 14 + 14))
+    }
+
+    private static let nameMinWidth: CGFloat = 40
+
+    /// 表の行をタップしても開けるが、それに気づきにくい。入口をはっきり置く
+    private func playerDetailsButton(_ data: Computed) -> some View {
+        NavigationLink(value: PlayerPage(start: data.ranked.first?.name ?? "")) {
+            HStack(spacing: 8) {
+                Image(systemName: "person.text.rectangle.fill")
+                Text("個人成績の詳細を見る")
+                    .font(.system(size: 15, weight: .bold))
+                Spacer(minLength: 4)
+                Text("スワイプで次の人")
+                    .font(.system(size: 11, weight: .semibold))
+                    .opacity(0.8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+            }
+            .foregroundStyle(Palette.accentInk)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(Palette.accent, in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(data.ranked.isEmpty)
+        .accessibilityIdentifier("openPlayerDetails")
+    }
+
     private func table(_ data: Computed) -> some View {
-        VStack(spacing: 0) {
+        let width = nameWidth(data)
+        return VStack(spacing: 0) {
             HStack(spacing: 0) {
-                // 名前の欄は、数字の列を取った残りの幅を全部使う（行と同じ組み方にしてそろえる）
-                Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+                Color.clear.frame(minWidth: Self.nameMinWidth, maxWidth: width, maxHeight: 1)
                 ForEach(Self.columns, id: \.title) { column in
                     Text(column.title)
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(Palette.inkDim)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
+                        .minimumScaleFactor(0.7)
                         .frame(width: column.width)
                 }
+                Spacer(minLength: 0)
                 Color.clear.frame(width: Self.chevronWidth, height: 1)
             }
             .padding(.bottom, 8)
 
             ForEach(data.ranked) { report in
-                NavigationLink(value: report.name) {
-                    row(report, data)
+                NavigationLink(value: PlayerPage(start: report.name)) {
+                    row(report, data, nameWidth: width)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("statsRow-\(report.name)")
@@ -467,7 +460,7 @@ struct AllStatsView: View {
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(Palette.line))
     }
 
-    private func row(_ report: PlayerReport, _ data: Computed) -> some View {
+    private func row(_ report: PlayerReport, _ data: Computed, nameWidth: CGFloat) -> some View {
         HStack(spacing: 0) {
             HStack(spacing: 5) {
                 Circle().fill(data.color(report.name)).frame(width: 7, height: 7)
@@ -478,20 +471,22 @@ struct AllStatsView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minWidth: Self.nameMinWidth, maxWidth: nameWidth, alignment: .leading)
 
+            // 率のマスは％を付けない。見出しに「率」と書いてあるので、数字だけの方が詰まって見えない
             let values: [(String, Bool)] = [
                 ("\(report.rounds)", false),
                 (StatsFormat.signed(report.total, data.decimalMode), report.total < 0),
                 (StatsFormat.average(report.averageScore, data.decimalMode), (report.averageScore ?? 0) < 0),
                 (StatsFormat.rank(report.averageRank), false),
-                (StatsFormat.percent(report.topRate), false),
-                (StatsFormat.percent(report.rentaiRate), false),
-                (StatsFormat.percent(report.lastRate), false),
+                (StatsFormat.rateNumber(report.topRate), false),
+                (StatsFormat.rateNumber(report.rentaiRate), false),
+                (StatsFormat.rateNumber(report.lastRate), false),
             ]
             ForEach(Array(zip(Self.columns, values).enumerated()), id: \.offset) { _, pair in
                 cell(pair.1.0, negative: pair.1.1, width: pair.0.width)
             }
+            Spacer(minLength: 0)
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .bold))
@@ -713,5 +708,381 @@ private extension Array where Element: Hashable {
     /// いちばん多く出てくる値
     func mostCommon() -> Element? {
         Dictionary(grouping: self, by: { $0 }).max { $0.value.count < $1.value.count }?.key
+    }
+}
+
+// MARK: - ハイライトの枠（試作の9種類・2回目）
+
+/// ハイライト1枠。**大きさはどのデザインでも同じ。** `design` の番号で見た目だけを変える。
+///
+/// 2回目の試作の方針（本人の感想から）：
+/// - どれも**枠がある**（1回目の「縁取り」「ネオン」が好評）
+/// - どれにも**項目ならではの絵**を入れる（1回目の「痛恨の1局」の雷雨が好評）
+/// - **派手なもの**も混ぜる（1回目の「ネオン」が好評）
+///
+/// 0 ネオン額縁 / 1 トレカ / 2 バッジ / 3 コーナー金具 / 4 グラデーション縁 /
+/// 5 スタンプ / 6 光輪 / 7 内枠 / 8 透かし＋縁
+private struct HighlightCard: View {
+    let title: String
+    let symbol: String
+    let accent: String?
+    let name: String
+    let value: String
+    let note: String?
+    let color: Color
+    let design: Int
+
+    static let height: CGFloat = 124
+    /// 塗りつぶした面の上の濃い文字
+    static let darkInk = Color(red: 0.06, green: 0.08, blue: 0.06)
+    /// 暗い地の色。ライトモードでも暗いまま（ネオン系は暗い地でないと光って見えない）
+    static let night = Color(red: 0.05, green: 0.06, blue: 0.07)
+
+    var body: some View {
+        content
+            .frame(maxWidth: .infinity)
+            .frame(height: Self.height)
+            // 読み上げは見出しから始める（絵は読ませない。UIテストもこの順で探す）
+            .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder private var content: some View {
+        switch design % 9 {
+        case 0: neonFrame
+        case 1: tradingCard
+        case 2: badge
+        case 3: brackets
+        case 4: gradientRing
+        case 5: stamp
+        case 6: halo
+        case 7: innerFrame
+        default: watermarkFrame
+        }
+    }
+
+    // MARK: 部品
+
+    private func illustration(size: CGFloat, color: Color) -> some View {
+        Illustration(symbol: symbol, accent: accent, size: size, color: color)
+    }
+
+    private func titleText(_ ink: Color) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: .heavy))
+            .foregroundStyle(ink)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+    }
+
+    private func valueText(_ ink: Color, size: CGFloat = 26) -> some View {
+        Text(value)
+            .font(.system(size: size, weight: .black))
+            .monospacedDigit()
+            .foregroundStyle(ink)
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+    }
+
+    private func nameText(_ ink: Color) -> some View {
+        Text(name)
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(ink)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+    }
+
+    /// 日付の無い枠も同じ段組みにして、値と名前の位置をそろえる
+    private func noteText(_ ink: Color) -> some View {
+        Text(note ?? "–")
+            .font(.system(size: 9.5, weight: .semibold))
+            .foregroundStyle(ink)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .opacity(note == nil ? 0 : 1)
+            .accessibilityHidden(note == nil)
+    }
+
+    // MARK: 0 ネオン額縁
+
+    private var neonFrame: some View {
+        VStack(spacing: 4) {
+            titleText(color)
+            valueText(color)
+                .shadow(color: color.opacity(0.9), radius: 6)
+            nameText(.white)
+            noteText(.white.opacity(0.6))
+        }
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            ZStack(alignment: .bottomTrailing) {
+                Self.night
+                illustration(size: 52, color: color.opacity(0.25))
+                    .offset(x: 6, y: 6)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+        }
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(color, lineWidth: 2))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(color.opacity(0.45), lineWidth: 1).padding(4))
+        .shadow(color: color.opacity(0.6), radius: 8)
+    }
+
+    // MARK: 1 トレカ
+
+    private var tradingCard: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                Illustration(symbol: symbol, accent: nil, size: 13, color: Self.darkInk)
+                titleText(Self.darkInk)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 30)
+            .background(color)
+
+            VStack(spacing: 3) {
+                valueText(Palette.ink, size: 24)
+                nameText(color)
+                noteText(Palette.inkDim)
+            }
+            .padding(.horizontal, 6)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                ZStack(alignment: .bottomTrailing) {
+                    Palette.surface
+                    illustration(size: 40, color: color.opacity(0.14))
+                        .offset(x: 6, y: 6)
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(color, lineWidth: 3))
+    }
+
+    // MARK: 2 バッジ
+
+    private var badge: some View {
+        VStack(spacing: 3) {
+            titleText(Palette.inkDim)
+            ZStack {
+                Circle().fill(color)
+                Circle().strokeBorder(.white.opacity(0.6), lineWidth: 1.5).padding(2)
+                Illustration(symbol: symbol, accent: nil, size: 14, color: Self.darkInk)
+            }
+            .frame(width: 32, height: 32)
+            valueText(Palette.ink, size: 22)
+            nameText(color)
+            noteText(Palette.inkDim)
+        }
+        .padding(.horizontal, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(color, lineWidth: 2))
+    }
+
+    // MARK: 3 コーナー金具
+
+    private var brackets: some View {
+        VStack(spacing: 4) {
+            titleText(color)
+            valueText(.white)
+            nameText(color)
+            noteText(.white.opacity(0.6))
+        }
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            ZStack {
+                Self.night
+                illustration(size: 60, color: color.opacity(0.16))
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .overlay(
+            CornerBrackets(length: 18)
+                .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .padding(2)
+        )
+        .shadow(color: color.opacity(0.5), radius: 6)
+    }
+
+    // MARK: 4 グラデーション縁
+
+    private var gradientRing: some View {
+        VStack(spacing: 4) {
+            titleText(Palette.inkDim)
+            valueText(Palette.ink)
+            nameText(Palette.ink)
+            noteText(Palette.inkDim)
+        }
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            ZStack(alignment: .bottomTrailing) {
+                Palette.surface
+                illustration(size: 44, color: color.opacity(0.3))
+                    .offset(x: 4, y: 4)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(
+                    AngularGradient(colors: [color, .white.opacity(0.9), color,
+                                             color.mix(with: .black, by: 0.4), color],
+                                    center: .center),
+                    lineWidth: 3
+                )
+        )
+    }
+
+    // MARK: 5 スタンプ
+
+    private var stamp: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            titleText(color)
+                .padding(.trailing, 36)
+            Spacer(minLength: 0)
+            valueText(Palette.ink)
+            nameText(Palette.ink)
+            noteText(Palette.inkDim)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background {
+            ZStack {
+                Palette.surface
+                color.opacity(0.14)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .overlay(alignment: .topTrailing) {
+            ZStack {
+                Circle().strokeBorder(color, lineWidth: 2)
+                Circle().strokeBorder(color.opacity(0.6), lineWidth: 1).padding(3)
+                Illustration(symbol: symbol, accent: nil, size: 16, color: color)
+            }
+            .frame(width: 40, height: 40)
+            .rotationEffect(.degrees(-12))
+            .padding(6)
+        }
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(color, style: StrokeStyle(lineWidth: 2, dash: [5, 3])))
+    }
+
+    // MARK: 6 光輪
+
+    private var halo: some View {
+        VStack(spacing: 3) {
+            titleText(.white.opacity(0.85))
+            illustration(size: 20, color: color)
+                .shadow(color: color, radius: 6)
+            valueText(.white, size: 22)
+                .shadow(color: color.opacity(0.9), radius: 5)
+            nameText(color)
+            noteText(.white.opacity(0.6))
+        }
+        .padding(.horizontal, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            ZStack {
+                Self.night
+                RadialGradient(colors: [color.opacity(0.6), .clear], center: .top, startRadius: 2, endRadius: 95)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+        }
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(color.opacity(0.85), lineWidth: 1.5))
+        .shadow(color: color.opacity(0.45), radius: 7)
+    }
+
+    // MARK: 7 内枠
+
+    private var innerFrame: some View {
+        VStack(spacing: 4) {
+            titleText(Self.darkInk.opacity(0.75))
+            valueText(Self.darkInk)
+            nameText(Self.darkInk)
+            noteText(Self.darkInk.opacity(0.7))
+        }
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            ZStack(alignment: .bottomTrailing) {
+                color
+                LinearGradient(colors: [.white.opacity(0.25), .clear], startPoint: .top, endPoint: .center)
+                illustration(size: 50, color: Self.darkInk.opacity(0.16))
+                    .offset(x: 6, y: 6)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+        }
+        .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(.white.opacity(0.8), lineWidth: 1.5).padding(5))
+        .shadow(color: color.opacity(0.4), radius: 6, y: 3)
+    }
+
+    // MARK: 8 透かし＋縁
+
+    private var watermarkFrame: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            titleText(color)
+            Spacer(minLength: 0)
+            valueText(Palette.ink, size: 28)
+            nameText(Palette.ink)
+            noteText(Palette.inkDim)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background {
+            ZStack(alignment: .bottomTrailing) {
+                Palette.surface
+                color.opacity(0.16)
+                illustration(size: 62, color: color.opacity(0.35))
+                    .offset(x: 12, y: 12)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+        }
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(color, lineWidth: 1.5))
+        .shadow(color: color.opacity(0.45), radius: 6)
+    }
+}
+
+/// 項目ならではの絵。主の記号に、小さな記号を右上へ添える（王冠にきらめき、炎に炎など）
+private struct Illustration: View {
+    let symbol: String
+    let accent: String?
+    let size: CGFloat
+    let color: Color
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Image(systemName: symbol)
+                .font(.system(size: size, weight: .black))
+            if let accent {
+                Image(systemName: accent)
+                    .font(.system(size: size * 0.4, weight: .black))
+                    .offset(x: size * 0.3, y: -size * 0.2)
+            }
+        }
+        .foregroundStyle(color)
+        .accessibilityHidden(true)
+    }
+}
+
+/// 四隅だけの枠（カメラのファインダーのような金具）
+private struct CornerBrackets: Shape {
+    var length: CGFloat = 16
+
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX, y: r.minY + length))
+        p.addLine(to: CGPoint(x: r.minX, y: r.minY))
+        p.addLine(to: CGPoint(x: r.minX + length, y: r.minY))
+        p.move(to: CGPoint(x: r.maxX - length, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.minY))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.minY + length))
+        p.move(to: CGPoint(x: r.maxX, y: r.maxY - length))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.maxX - length, y: r.maxY))
+        p.move(to: CGPoint(x: r.minX + length, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.minX, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.minX, y: r.maxY - length))
+        return p
     }
 }

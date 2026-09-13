@@ -34,12 +34,10 @@ struct RecordsView: View {
                     ForEach(mine) { dir in
                         NavigationLink(value: dir.uid) { row(dir, tint: Palette.accent) }
                             .accessibilityIdentifier("directory-\(dir.uid.uuidString)")
-                    }
-                    .onDelete { offsets in
-                        // 「マイ記録」は消せない。中の記録の行き先が無くなる
-                        if let index = offsets.first, mine[index].isDefault == false {
-                            pendingDelete = mine[index]
-                        }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                // 「マイ記録」は消せない。中の記録の行き先が無くなるので、削除の操作ごと出さない
+                                if !dir.isDefault { deleteAction(dir) }
+                            }
                     }
                 } header: {
                     Text("自分の記録")
@@ -53,9 +51,9 @@ struct RecordsView: View {
                             NavigationLink(value: dir.uid) { row(dir, tint: receivedTint) }
                                 .accessibilityIdentifier("directory-\(dir.uid.uuidString)")
                                 .listRowBackground(receivedTint.opacity(0.10))
-                        }
-                        .onDelete { offsets in
-                            if let index = offsets.first { pendingDelete = received[index] }
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    deleteAction(dir)
+                                }
                         }
                     } header: {
                         Label("共有されたもの", systemImage: "person.2.fill")
@@ -123,6 +121,21 @@ struct RecordsView: View {
                 await SharePublisher.refreshSubscriptions(in: context)
             }
         }
+    }
+
+    /// スワイプの削除。**確認を出すだけで、ここでは消さない。**
+    ///
+    /// `onDelete` を使わない。`onDelete` は押した瞬間に一覧から行を消す前提で動くので、
+    /// 確認を挟んだり削除を断ったりすると、行だけ消えてデータは残る。そのまま別の画面へ進むと
+    /// 一覧の数が合わず UICollectionView が落ちた（2026-09-13 実機。引き継ぎ書 4-128）。
+    /// 役割も `.destructive` にしない。付けると同じように行が先に消える
+    private func deleteAction(_ dir: Directory) -> some View {
+        Button {
+            pendingDelete = dir
+        } label: {
+            Label("削除", systemImage: "trash")
+        }
+        .tint(Palette.negative)
     }
 
     private func row(_ dir: Directory, tint: Color) -> some View {

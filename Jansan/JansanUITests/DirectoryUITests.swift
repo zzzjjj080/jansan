@@ -196,6 +196,49 @@ final class DirectoryUITests: XCTestCase {
         attach(app, "ディレクトリに保存")
     }
 
+    /// 「マイ記録」をスワイプして削除を押しても、そのあと別のディレクトリを開いて落ちないこと。
+    /// マイ記録は消せないので削除を断るが、一覧（UICollectionView）は行を消した前提で
+    /// 数を持ってしまい、次の更新で「項目数が合わない」で落ちていた（2026-09-13 実機で発生）
+    func testSwipeDeletingDefaultDirectoryDoesNotCrash() {
+        let app = launchApp()
+        let name = uniqueName("消えない")
+        openRecordsTab(app)
+        createDirectory(app, named: name)
+
+        let mine = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'マイ記録'")).firstMatch
+        XCTAssertTrue(mine.waitForExistence(timeout: 10), "「マイ記録」が無い")
+        mine.swipeLeft()
+        // スワイプの操作が無い行では、スワイプが行のタップとして効いて中に入ることがある。
+        // 入っていたら戻る（中の画面のゴミ箱を「削除」と取り違えないため）
+        let inside = app.navigationBars["マイ記録"]
+        if inside.waitForExistence(timeout: 2) {
+            inside.buttons.element(boundBy: 0).tap()
+            XCTAssertTrue(atDirectoryList(app), "一覧に戻れない")
+        }
+        let delete = app.buttons.matching(NSPredicate(format: "label == '削除' OR label == 'Delete'")).firstMatch
+        let offered = delete.exists
+        if offered {
+            delete.tap()
+            let alert = app.alerts.firstMatch
+            if alert.waitForExistence(timeout: 2) { alert.buttons.element(boundBy: 0).tap() }
+        }
+        attach(app, "マイ記録をスワイプした後")
+        XCTAssertFalse(offered, "消せない「マイ記録」にスワイプの削除が出ている")
+        // **消せないものは、スワイプした直後も一覧に残っていること。** 以前は行だけが消えて
+        // データは残り、一覧の数が食い違ったまま次の画面へ進んで落ちていた
+        XCTAssertTrue(mine.exists && mine.isHittable, "削除を断ったのに「マイ記録」の行が一覧から消えた")
+
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "作ったディレクトリが一覧に出ない")
+        row.tap()
+        XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 10), "作ったディレクトリが開かない（落ちた）")
+        XCTAssertEqual(app.state, .runningForeground, "アプリが落ちた")
+
+        // 一覧に戻っても「マイ記録」は残っている
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(mine.waitForExistence(timeout: 10), "「マイ記録」が消えた")
+    }
+
     /// CSV を貼ると、そのディレクトリに「日付未記入」で入り、あとから日付を入れられること
     func testImportCSVIntoDirectory() {
         let app = launchApp()
