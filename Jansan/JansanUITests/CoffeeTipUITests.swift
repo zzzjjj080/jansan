@@ -16,7 +16,9 @@ final class CoffeeTipUITests: XCTestCase {
 
     private func launchApp(arguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = arguments
+        // 初回の「使い方」が上に出ると設定ボタンが押せない。他のテストが初回の状態に
+        // 戻したあとに走ると落ちるので、他のスイートと同じく出さない指定を付ける
+        app.launchArguments = ["-didShowHowTo", "YES"] + arguments
         app.launch()
         return app
     }
@@ -32,6 +34,8 @@ final class CoffeeTipUITests: XCTestCase {
         let gear = app.buttons["openSettings"]
         XCTAssertTrue(gear.waitForExistence(timeout: 20), "設定ボタンが見つからない")
         gear.tap()
+        // 起動直後の1回目は飲まれることがある。効かなければ1回だけ押し直す
+        if !app.navigationBars["設定"].waitForExistence(timeout: 8) { gear.tap() }
         XCTAssertTrue(app.navigationBars["設定"].waitForExistence(timeout: 15), "設定画面が開かない")
     }
 

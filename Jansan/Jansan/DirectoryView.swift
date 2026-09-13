@@ -12,8 +12,13 @@ struct DirectoryView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("currentDirectory") private var currentDirectoryID = Directory.defaultUID.uuidString
 
-    @State private var showStats = false
-    @State private var showShare = false
+    /// シートは1本にまとめる。1つの画面に .sheet を複数付けると、どれかが開かなくなることがある
+    @State private var sheet: SheetKind?
+
+    private enum SheetKind: String, Identifiable {
+        case stats, share, importCSV
+        var id: String { rawValue }
+    }
     @State private var showRename = false
     @State private var deleteConfirm = false
     @State private var renameText = ""
@@ -51,7 +56,7 @@ struct DirectoryView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .primaryAction) {
                     Button {
-                        showStats = true
+                        sheet = .stats
                     } label: {
                         Label("集計", systemImage: "chart.line.uptrend.xyaxis")
                     }
@@ -68,8 +73,17 @@ struct DirectoryView: View {
                             .disabled(isCurrent)
                             .accessibilityIdentifier("makeCurrent")
 
+                            if !directory.isAutoBackup {
+                                Button {
+                                    sheet = .importCSV
+                                } label: {
+                                    Label("CSVを貼って取り込む", systemImage: "doc.on.clipboard")
+                                }
+                                .accessibilityIdentifier("importCSV")
+                            }
+
                             Button {
-                                showShare = true
+                                sheet = .share
                             } label: {
                                 Label(directory.isShared ? "共有の設定" : "共有する",
                                       systemImage: "antenna.radiowaves.left.and.right")
@@ -109,11 +123,12 @@ struct DirectoryView: View {
                     .accessibilityIdentifier("directoryMenu")
                 }
             }
-            .sheet(isPresented: $showStats) {
-                AllStatsView(directory: directory)
-            }
-            .sheet(isPresented: $showShare) {
-                ShareSettingsView(directory: directory)
+            .sheet(item: $sheet) { kind in
+                switch kind {
+                case .stats: AllStatsView(directory: directory)
+                case .share: ShareSettingsView(directory: directory)
+                case .importCSV: CSVImportView(directory: directory)
+                }
             }
             .alert("名前を変える", isPresented: $showRename) {
                 TextField("名前", text: $renameText)

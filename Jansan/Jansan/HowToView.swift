@@ -81,7 +81,7 @@ struct HowToView: View {
                     arrow
                     step("集計", "chart.line.uptrend.xyaxis")
                 }
-                caption("記録は「ディレクトリ」に分けられます。卓や面子ごとに分けると集計が混ざりません")
+                caption("・記録は「ディレクトリ」に分けられます。卓や面子ごとに分けると集計が混ざりません\n・書き出したCSVは、ディレクトリの右上メニューから貼って戻せます")
             }
         }
     }

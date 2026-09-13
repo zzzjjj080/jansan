@@ -35,7 +35,7 @@ struct BackupCodecTests {
         #expect(restored.games[0].snapshot.session.totals == [30, 10, -10, -30])
     }
 
-    @Test("CSVは復元できない形式なので、読ませようとすると弾かれる")
+    @Test("CSVはバックアップの入口では読まない（CSVの取り込みは別の入口）")
     func rejectsCSV() {
         #expect(throws: BackupError.notJSON) {
             try Backup.decode("局,中村,五十嵐\n1,30,10\n")

@@ -196,6 +196,78 @@ final class DirectoryUITests: XCTestCase {
         attach(app, "ディレクトリに保存")
     }
 
+    /// CSV を貼ると、そのディレクトリに「日付未記入」で入り、あとから日付を入れられること
+    func testImportCSVIntoDirectory() {
+        let app = launchApp()
+        let name = uniqueName("取込")
+        openRecordsTab(app)
+        createDirectory(app, named: name)
+
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "作ったディレクトリが一覧に出ない")
+        row.tap()
+        XCTAssertTrue(app.navigationBars[name].waitForExistence(timeout: 10))
+
+        app.buttons["directoryMenu"].tap()
+        let item = app.buttons["importCSV"]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "「CSVを貼って取り込む」が無い")
+        item.tap()
+
+        let field = app.textViews["csvPasteField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10), "貼り付け欄が無い")
+
+        // AI へのお願い文を開いてコピーできる
+        let aiHelp = app.buttons.matching(NSPredicate(format: "label CONTAINS '写真や他のアプリから入れる'")).firstMatch
+        XCTAssertTrue(aiHelp.waitForExistence(timeout: 5), "AIへのお願い文の入口が無い")
+        aiHelp.tap()
+        let copyPrompt = app.buttons["copyAIPrompt"]
+        XCTAssertTrue(scrollTo(app, copyPrompt), "お願い文のコピーが無い")
+        copyPrompt.tap()
+        let copied = NSPredicate(format: "label == 'コピーしました'")
+        expectation(for: copied, evaluatedWith: copyPrompt)
+        waitForExpectations(timeout: 5)
+        attach(app, "AIへのお願い文")
+        // 閉じて貼り付け欄に戻る
+        aiHelp.tap()
+        for _ in 0..<3 where !field.isHittable { app.swipeDown() }
+
+        // 書き出しと同じ形の表を2つ続けて貼る
+        field.tap()
+        field.typeText("No,東,南,西,北\n1,30,10,-10,-30\n2,-20,40,0,-20\n合計,10,50,-10,-50\n\nNo,東,南,西\n1,15,-5,-10\n")
+        app.buttons["previewCSV"].tap()
+
+        let commit = app.buttons["commitCSV"]
+        XCTAssertTrue(commit.waitForExistence(timeout: 10), "取り込む内容が出ない")
+        XCTAssertTrue(scrollTo(app, commit), "取り込むボタンに届かない")
+        XCTAssertTrue(commit.label.contains("2 件"), "表2つが2件にならない: \(commit.label)")
+        attach(app, "CSVの取り込み内容")
+        commit.tap()
+
+        let done = app.alerts["取り込みました"]
+        XCTAssertTrue(done.waitForExistence(timeout: 10), "取り込みの完了が出ない")
+        done.buttons["OK"].tap()
+
+        // 一覧に「日付未記入」で2件
+        let unknown = app.buttons.matching(NSPredicate(format: "label CONTAINS '日付未記入'"))
+        XCTAssertTrue(unknown.firstMatch.waitForExistence(timeout: 10), "日付未記入の記録が出ない")
+        XCTAssertEqual(unknown.count, 2, "2件入っていない")
+        attach(app, "日付未記入で入った")
+
+        // あとから日付を入れる
+        app.buttons.matching(NSPredicate(format: "label == '日付とメモを編集'")).firstMatch.tap()
+        let toggle = app.switches["hasPlayedAt"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10), "「日付を入れる」が無い")
+        XCTAssertEqual(toggle.value as? String, "0", "未記入なのに日付が入っている扱いになっている")
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        XCTAssertTrue(app.datePickers["playedAtPicker"].waitForExistence(timeout: 5), "日付の欄が出ない")
+        app.navigationBars["記録を編集"].buttons["保存"].tap()
+
+        let stillUnknown = app.buttons.matching(NSPredicate(format: "label CONTAINS '日付未記入'"))
+        let deadline = Date().addingTimeInterval(10)
+        while stillUnknown.count != 1 && Date() < deadline { usleep(300_000) }
+        XCTAssertEqual(stillUnknown.count, 1, "日付を入れても未記入のまま")
+    }
+
     /// 共有の設定画面が開き、入力の検証が効くこと。
     /// 実際の送信は iCloud アカウントが無いので「サインインしていない」で止まる。
     /// **それが正しく伝わる**ところまでを確かめる

@@ -4,9 +4,9 @@ import JansanCore
 
 /// 記録のバックアップと取り込み。
 ///
-/// **CSVとは別物。** CSVは合計行つき・お休みは空欄・小数変換済みで、
-/// 人が読むためのもの。あれを読み戻して表を復元することはできない。
-/// こちらは `GameSnapshot` をそのままJSONにしたもので、復元できる。
+/// **CSVの取り込みとは別の入口。** CSVは表の点数だけで、日付・メモ・名簿は持たない
+/// （CSVはディレクトリの画面から取り込む → CSVImportView）。
+/// こちらは `GameSnapshot` をそのままJSONにしたもので、日付・メモごと丸ごと戻せる。
 struct BackupView: View {
     let board: ScoreBoard
     @Environment(\.dismiss) private var dismiss
@@ -136,7 +136,7 @@ struct BackupView: View {
     private func message(for error: BackupError) -> String {
         switch error {
         case .notJSON:
-            return "バックアップの形式ではありません。CSVを貼っていませんか。CSVからは記録を戻せないので、書き出しでコピーしたものを貼ってください。"
+            return "バックアップの形式ではありません。CSVを貼るときは、記録の画面でディレクトリを開き、右上のメニューの「CSVを貼って取り込む」から入れてください。"
         case .notJansanBackup:
             return "雀算のバックアップではないようです。"
         case .tooNew(let version):

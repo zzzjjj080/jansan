@@ -39,6 +39,16 @@ public struct Session: Equatable, Sendable, Codable {
         self.playersPerRound = playersPerRound
     }
 
+    /// 局の中身ごと組み立てる。CSV の取り込みで使う。
+    /// 最後に入力待ちの空行を足すのは、画面で打ったときと同じ形に揃えるため
+    public init(players: [String], rounds: [Round], decimalMode: Bool, playersPerRound: Int) {
+        self.players = players
+        self.rounds = rounds.isEmpty ? [Round(playerCount: players.count)] : rounds
+        self.decimalMode = decimalMode
+        self.playersPerRound = playersPerRound
+        appendRoundIfNeeded()
+    }
+
     // MARK: - 保存との互換
 
     private enum CodingKeys: String, CodingKey {

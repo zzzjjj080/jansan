@@ -235,7 +235,7 @@ struct SettingsView: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("showBackup")
         } footer: {
-            Text("\(CloudStatus.detail)\n\n「バックアップ」では、保存した記録をまとめて書き出して、あとから戻せます。書き出し（CSV）は人が読むためのもので、そこからは戻せません。")
+            Text("\(CloudStatus.detail)\n\n・「バックアップ」は、記録を日付・メモごと書き出して戻せます\n・CSVは、記録の画面で各ディレクトリの右上メニューから貼って取り込めます")
         }
     }
 

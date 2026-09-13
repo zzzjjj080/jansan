@@ -46,6 +46,10 @@ final class SavedGame {
     /// 表示や集計に使う対局日。未設定なら保存日時で代用する
     var effectivePlayedAt: Date { playedAt ?? savedAt }
 
+    /// CSV から取り込んだなど、対局日が分からない記録。
+    /// **nil（古い記録＝保存日時で代用）とは別。** 印の日付を入れて見分ける
+    var isDateUnknown: Bool { PlayedDate.isUnknown(playedAt) }
+
     init(snapshot: GameSnapshot, isDraft: Bool, savedAt: Date = .now,
          playedAt: Date? = nil, note: String = "", uid: UUID = UUID()) throws {
         self.savedAt = savedAt
@@ -66,7 +70,8 @@ final class SavedGame {
 
     /// 端末の言語設定に関係なく日本語表記にする。アプリのUIが日本語で統一されているため
     var dateLabel: String {
-        effectivePlayedAt.formatted(
+        guard !isDateUnknown else { return "日付未記入" }
+        return effectivePlayedAt.formatted(
             .dateTime
                 .year().month(.twoDigits).day(.twoDigits)
                 .hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)
@@ -96,7 +101,8 @@ final class SavedGame {
 
     /// 日付だけの表記。対局日の編集欄に出す
     var playedDayLabel: String {
-        effectivePlayedAt.formatted(
+        guard !isDateUnknown else { return "日付未記入" }
+        return effectivePlayedAt.formatted(
             .dateTime.year().month().day().locale(Locale(identifier: "ja_JP"))
         )
     }

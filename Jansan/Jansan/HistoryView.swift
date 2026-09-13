@@ -42,7 +42,7 @@ struct HistoryView: View {
                         systemImage: "tray",
                         description: Text(directory.isSubscribed
                                           ? "送り主がまだ記録を入れていません。"
-                                          : "入力画面の保存ボタン（下向き矢印）を押すと、その時点の表が日付付きでここに残ります。")
+                                          : "・入力画面の保存ボタン（フロッピー）を押すと、その時点の表がここに残ります\n・右上のメニューから、CSVを貼って取り込むこともできます")
                     )
                 } else if shown.isEmpty {
                     ContentUnavailableView.search(text: query)

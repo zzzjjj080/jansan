@@ -12,7 +12,7 @@ struct ExportView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 14) {
-                Text("現在の表をCSVにしています。コピーしてメモやスプレッドシートに貼り付けたり、そのまま共有できます。")
+                Text("・コピーしてメモや表計算ソフトに貼れます\n・記録の画面で各ディレクトリの右上メニューから、貼って取り込めます（日付は未記入で入ります）")
                     .font(.system(size: 12))
                     .foregroundStyle(Palette.inkDim)
                     .frame(maxWidth: .infinity, alignment: .leading)

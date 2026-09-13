@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import JansanCore
 
 /// 保存した記録の「対局日」と「ひとことメモ」を直す画面。
 ///
@@ -11,19 +12,26 @@ struct RecordEditView: View {
     @Environment(\.modelContext) private var context
 
     @State private var day: Date = .now
+    @State private var hasDate = true
     @State private var note: String = ""
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    DatePicker("対局した日", selection: $day, displayedComponents: .date)
-                        .environment(\.locale, Locale(identifier: "ja_JP"))
-                        .accessibilityIdentifier("playedAtPicker")
+                    Toggle("日付を入れる", isOn: $hasDate)
+                        .accessibilityIdentifier("hasPlayedAt")
+                    if hasDate {
+                        DatePicker("対局した日", selection: $day, displayedComponents: .date)
+                            .environment(\.locale, Locale(identifier: "ja_JP"))
+                            .accessibilityIdentifier("playedAtPicker")
+                    }
                 } header: {
                     Text("日付")
                 } footer: {
-                    Text("後日まとめて入力すると、保存した日と実際に打った日がズレます。ここで実際の日に直しておくと、期間で集計したときに正しく入ります。保存日時（\(record.savedAtLabel)）はそのまま残ります。")
+                    Text(hasDate
+                         ? "・実際に打った日に直すと、期間で集計したときに正しく入ります\n・保存日時（\(record.savedAtLabel)）はそのまま残ります"
+                         : "・日付未記入の記録は、集計の「全期間」にだけ入ります\n・CSVから取り込んだ記録は、未記入で入っています")
                 }
 
                 Section {
@@ -53,13 +61,14 @@ struct RecordEditView: View {
             }
         }
         .onAppear {
-            day = record.effectivePlayedAt
+            hasDate = !record.isDateUnknown
+            day = hasDate ? record.effectivePlayedAt : .now
             note = record.note
         }
     }
 
     private func save() {
-        record.playedAt = day
+        record.playedAt = hasDate ? day : PlayedDate.unknown
         record.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
         try? context.save()
         dismiss()
