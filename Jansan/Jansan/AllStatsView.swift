@@ -330,32 +330,34 @@ struct AllStatsView: View {
                                    note: note, color: data.color(name)))
         }
 
-        if let r = reports.max(by: { $0.count(ofRank: 1) < $1.count(ofRank: 1) }) {
-            add("最多トップ", "crown.fill", accent: "sparkles", r.name, "\(r.count(ofRank: 1))回")
+        // 率で並べるものは、数局しか打っていない人が100%で並ばないよう5局以上に絞る
+        let regulars = reports.filter { $0.rounds >= Self.minimumRounds }
+
+        // 1段目：トップ率・平均着順・連続トップ（本人の指示の並び）
+        // 回数ではなく率にする。回数だと打った数の多い人が有利になる。何回中何回かを添える
+        if let r = regulars.max(by: { ($0.topRate ?? 0) < ($1.topRate ?? 0) }) {
+            add("トップ率", "crown.fill", accent: "sparkles", r.name, StatsFormat.percent(r.topRate),
+                note: "\(r.rounds)回中 \(r.count(ofRank: 1))回")
         }
-        if let r = reports.max(by: { ($0.bestGame ?? .min) < ($1.bestGame ?? .min) }), let best = r.bestGame {
-            add("最高の対局", "trophy.fill", accent: "sparkles", r.name, StatsFormat.signed(best, decimal),
-                note: StatsFormat.day(r.bestGameDate))
+        if let r = regulars.min(by: { ($0.averageRank ?? .infinity) < ($1.averageRank ?? .infinity) }) {
+            add("平均着順", "medal.fill", accent: "star.fill", r.name, StatsFormat.rank(r.averageRank),
+                note: "参加\(r.rounds)回の平均")
         }
         if let r = reports.max(by: { $0.longestTopStreak < $1.longestTopStreak }) {
             add("連続トップ", "flame.fill", accent: "flame.fill", r.name, "\(r.longestTopStreak)連続",
                 note: StatsFormat.day(r.longestTopStreakDate))
         }
-        // 本人の打った回数と、みんなで打った局数を並べる
-        if let r = reports.max(by: { $0.rounds < $1.rounds }) {
-            // 「皆勤賞」にしない。60回中55回でも1番なら出るので、皆勤とは限らない（本人の指摘）
-            add("最多参加", "calendar.badge.checkmark", r.name, "\(r.rounds)回",
-                note: "全\(data.roundCount)局中の参加回数")
-        }
-        let regulars = reports.filter { $0.rounds >= Self.minimumRounds }
+
+        // 2段目：ラス回避率・最高の日・絶好調
+        // 率だけだと何回中なのか分からない。分母（打った局数）と、ラスになった回数を添える
         if let r = regulars.max(by: { ($0.lastAvoidRate ?? 0) < ($1.lastAvoidRate ?? 0) }) {
-            // 率だけだと何回中なのか分からない。分母（打った局数）と、ラスになった回数を添える
             add("ラス回避率", "checkmark.shield.fill", r.name, StatsFormat.percent(r.lastAvoidRate),
                 note: "\(r.rounds)局中 ラス\(r.lastCount)回")
         }
-        if let r = regulars.min(by: { ($0.averageRank ?? .infinity) < ($1.averageRank ?? .infinity) }) {
-            add("平均着順", "medal.fill", accent: "star.fill", r.name, StatsFormat.rank(r.averageRank),
-                note: "参加\(r.rounds)回の平均")
+        // 1回の記録（その日）の合計がいちばん多かった人。「対局」だと1局と紛らわしいので「最高の日」
+        if let r = reports.max(by: { ($0.bestGame ?? .min) < ($1.bestGame ?? .min) }), let best = r.bestGame {
+            add("最高の日", "trophy.fill", accent: "sparkles", r.name, StatsFormat.signed(best, decimal),
+                note: StatsFormat.day(r.bestGameDate))
         }
         // 卓全体の直近で切る。しばらく来ていない人の昔の好成績を「今」として出さない
         let hot = Report.recentWindow(games: data.selected)
@@ -365,7 +367,13 @@ struct AllStatsView: View {
             add("絶好調", "bolt.fill", accent: "bolt.fill", hot.name, StatsFormat.average(hot.averageScore, decimal),
                 note: "直近\(min(Report.hotWindow, data.roundCount))局の1局平均")
         }
-        // 最高の1局は痛恨の1局の隣（下段の真ん中）。1局の最高と最低を並べる（本人の指示）
+
+        // 3段目：最多参加・最高の1局・痛恨の1局（1局の最高と最低を並べる）
+        // 「皆勤賞」にしない。60回中55回でも1番なら出るので、皆勤とは限らない
+        if let r = reports.max(by: { $0.rounds < $1.rounds }) {
+            add("最多参加", "calendar.badge.checkmark", r.name, "\(r.rounds)回",
+                note: "全\(data.roundCount)局中の参加回数")
+        }
         if let r = reports.max(by: { ($0.bestRound ?? .min) < ($1.bestRound ?? .min) }), let best = r.bestRound {
             add("最高の1局", "star.fill", accent: "sparkle", r.name, StatsFormat.signed(best, decimal),
                 note: StatsFormat.day(r.bestRoundDate))

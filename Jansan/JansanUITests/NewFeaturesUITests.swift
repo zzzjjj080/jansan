@@ -186,7 +186,7 @@ final class NewFeaturesUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["いちばん安定"].exists, "ばらつきのハイライトが残っている")
         XCTAssertTrue(app.descendants(matching: .any)["latestRecord"].exists, "最近の記録が出ていない")
         // 枠は読み上げ用に1つにまとめているので、見出しで始まる要素を探す
-        for title in ["最多トップ", "最多参加", "痛恨の1局"] {
+        for title in ["連続トップ", "最多参加", "痛恨の1局"] {
             let card = app.descendants(matching: .any)
                 .matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
             XCTAssertTrue(card.exists, "ハイライト「\(title)」が無い")
