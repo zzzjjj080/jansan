@@ -339,9 +339,8 @@ struct AllStatsView: View {
             add("連続トップ", "flame.fill", accent: "flame.fill", r.name, "\(r.longestTopStreak)連続",
                 note: StatsFormat.day(r.longestTopStreakDate))
         }
-        if let r = reports.max(by: { ($0.bestGame ?? .min) < ($1.bestGame ?? .min) }), let best = r.bestGame {
-            add("最高の対局", "trophy.fill", accent: "sparkles", r.name, StatsFormat.signed(best, decimal),
-                note: StatsFormat.day(r.bestGameDate))
+        if let r = reports.max(by: { $0.rounds < $1.rounds }) {
+            add("皆勤賞", "calendar.badge.checkmark", r.name, "\(r.rounds)局")
         }
         let regulars = reports.filter { $0.rounds >= Self.minimumRounds }
         if let r = regulars.max(by: { ($0.lastAvoidRate ?? 0) < ($1.lastAvoidRate ?? 0) }) {
@@ -360,8 +359,10 @@ struct AllStatsView: View {
             add("絶好調", "bolt.fill", accent: "bolt.fill", hot.name, StatsFormat.average(hot.averageScore, decimal),
                 note: "直近\(min(Report.hotWindow, data.roundCount))局の1局平均")
         }
-        if let r = reports.max(by: { $0.rounds < $1.rounds }) {
-            add("皆勤賞", "calendar.badge.checkmark", r.name, "\(r.rounds)局")
+        // 最高の対局は痛恨の1局の隣（下段の真ん中）。勝ちと負けの記録を並べて見せる（本人の指示）
+        if let r = reports.max(by: { ($0.bestGame ?? .min) < ($1.bestGame ?? .min) }), let best = r.bestGame {
+            add("最高の対局", "trophy.fill", accent: "sparkles", r.name, StatsFormat.signed(best, decimal),
+                note: StatsFormat.day(r.bestGameDate))
         }
         if let r = reports.min(by: { ($0.worstRound ?? .max) < ($1.worstRound ?? .max) }), let worst = r.worstRound {
             add("痛恨の1局", "cloud.bolt.rain.fill", r.name, StatsFormat.signed(worst, decimal),
