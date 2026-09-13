@@ -380,14 +380,14 @@ struct AllStatsView: View {
     private static let columns: [(title: String, width: CGFloat)] = [
         ("局", 28), ("合計", 48), ("平均", 42), ("平着", 36), ("トップ", 38), ("連対", 38), ("ラス", 36),
     ]
-    private static let nameWidth: CGFloat = 62
     private static let chevronWidth: CGFloat = 12
 
     /// 横に送らずに1画面に収める。名前の残りの幅を列で等分する
     private func table(_ data: Computed) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                Color.clear.frame(width: Self.nameWidth, height: 1)
+                // 名前の欄は、数字の列を取った残りの幅を全部使う（行と同じ組み方にしてそろえる）
+                Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
                 ForEach(Self.columns, id: \.title) { column in
                     Text(column.title)
                         .font(.system(size: 11, weight: .bold))
@@ -396,7 +396,6 @@ struct AllStatsView: View {
                         .minimumScaleFactor(0.8)
                         .frame(width: column.width)
                 }
-                Spacer(minLength: 0)
                 Color.clear.frame(width: Self.chevronWidth, height: 1)
             }
             .padding(.bottom, 8)
@@ -419,15 +418,16 @@ struct AllStatsView: View {
 
     private func row(_ report: PlayerReport, _ data: Computed) -> some View {
         HStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Circle().fill(data.color(report.name)).frame(width: 8, height: 8)
+            HStack(spacing: 5) {
+                Circle().fill(data.color(report.name)).frame(width: 7, height: 7)
+                // 長い名前は「…」で切らずに縮めて全部見せる。誰の行か分からなくなるので
                 Text(report.name)
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .minimumScaleFactor(0.5)
             }
-            .frame(width: Self.nameWidth, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             let values: [(String, Bool)] = [
                 ("\(report.rounds)", false),
@@ -441,7 +441,6 @@ struct AllStatsView: View {
             ForEach(Array(zip(Self.columns, values).enumerated()), id: \.offset) { _, pair in
                 cell(pair.1.0, negative: pair.1.1, width: pair.0.width)
             }
-            Spacer(minLength: 0)
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .bold))
