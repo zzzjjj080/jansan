@@ -367,7 +367,7 @@ struct AllStatsView: View {
                     .minimumScaleFactor(0.8)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 108, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
         .padding(12)
         .background(item.color, in: RoundedRectangle(cornerRadius: 14))
         .accessibilityElement(children: .combine)
@@ -375,8 +375,12 @@ struct AllStatsView: View {
 
     // MARK: - 成績表
 
-    private static let columns = ["局", "合計", "平均", "平着", "トップ", "連対", "ラス"]
-    private static let nameWidth: CGFloat = 74
+    /// 列ごとに、いちばん長い値（「+37.6」「100%」など）が14ptで収まる幅を決め打ちにする。
+    /// **等分にしない。** 等分だと長い値のマスだけ字が縮み、同じ行で字の大きさがそろわない
+    private static let columns: [(title: String, width: CGFloat)] = [
+        ("局", 28), ("合計", 48), ("平均", 42), ("平着", 36), ("トップ", 38), ("連対", 38), ("ラス", 36),
+    ]
+    private static let nameWidth: CGFloat = 62
     private static let chevronWidth: CGFloat = 12
 
     /// 横に送らずに1画面に収める。名前の残りの幅を列で等分する
@@ -384,14 +388,15 @@ struct AllStatsView: View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 Color.clear.frame(width: Self.nameWidth, height: 1)
-                ForEach(Self.columns, id: \.self) { title in
-                    Text(title)
-                        .font(.system(size: 12, weight: .bold))
+                ForEach(Self.columns, id: \.title) { column in
+                    Text(column.title)
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(Palette.inkDim)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity)
+                        .frame(width: column.width)
                 }
+                Spacer(minLength: 0)
                 Color.clear.frame(width: Self.chevronWidth, height: 1)
             }
             .padding(.bottom, 8)
@@ -424,14 +429,19 @@ struct AllStatsView: View {
             }
             .frame(width: Self.nameWidth, alignment: .leading)
 
-            cell("\(report.rounds)")
-            cell(StatsFormat.signed(report.total, data.decimalMode), negative: report.total < 0)
-            cell(StatsFormat.average(report.averageScore, data.decimalMode),
-                 negative: (report.averageScore ?? 0) < 0)
-            cell(StatsFormat.rank(report.averageRank))
-            cell(StatsFormat.percent(report.topRate))
-            cell(StatsFormat.percent(report.rentaiRate))
-            cell(StatsFormat.percent(report.lastRate))
+            let values: [(String, Bool)] = [
+                ("\(report.rounds)", false),
+                (StatsFormat.signed(report.total, data.decimalMode), report.total < 0),
+                (StatsFormat.average(report.averageScore, data.decimalMode), (report.averageScore ?? 0) < 0),
+                (StatsFormat.rank(report.averageRank), false),
+                (StatsFormat.percent(report.topRate), false),
+                (StatsFormat.percent(report.rentaiRate), false),
+                (StatsFormat.percent(report.lastRate), false),
+            ]
+            ForEach(Array(zip(Self.columns, values).enumerated()), id: \.offset) { _, pair in
+                cell(pair.1.0, negative: pair.1.1, width: pair.0.width)
+            }
+            Spacer(minLength: 0)
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .bold))
@@ -445,14 +455,15 @@ struct AllStatsView: View {
         .accessibilityLabel(spoken(report, data))
     }
 
-    private func cell(_ text: String, negative: Bool = false) -> some View {
+    private func cell(_ text: String, negative: Bool, width: CGFloat) -> some View {
         Text(text)
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
+            .font(.system(size: 14, weight: .semibold, design: .rounded))
             .monospacedDigit()
             .foregroundStyle(negative ? Palette.negative : Palette.ink)
             .lineLimit(1)
-            .minimumScaleFactor(0.6)
-            .frame(maxWidth: .infinity)
+            // 決め打ちの幅で収まる前提。桁の多い点数のときだけの保険
+            .minimumScaleFactor(0.75)
+            .frame(width: width)
     }
 
     private func spoken(_ report: PlayerReport, _ data: Computed) -> String {
