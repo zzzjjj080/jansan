@@ -13,6 +13,19 @@ public enum PlayedDate {
         guard let date else { return false }
         return abs(date.timeIntervalSince1970) < 1
     }
+
+    /// 記録の一覧の並び。**対局日の新しい順。日付未記入は最後。**
+    ///
+    /// 対局日が無い古い記録（`nil`）は保存日時を対局日とみなす。
+    /// 対局日が同じなら保存の新しい順、日付未記入どうしも保存の新しい順
+    public static func newestFirst(played lhsPlayed: Date?, saved lhsSaved: Date,
+                                   before rhsPlayed: Date?, saved rhsSaved: Date) -> Bool {
+        let lhsUnknown = isUnknown(lhsPlayed), rhsUnknown = isUnknown(rhsPlayed)
+        if lhsUnknown != rhsUnknown { return rhsUnknown }
+        let lhsDate = lhsUnknown ? lhsSaved : (lhsPlayed ?? lhsSaved)
+        let rhsDate = rhsUnknown ? rhsSaved : (rhsPlayed ?? rhsSaved)
+        return lhsDate != rhsDate ? lhsDate > rhsDate : lhsSaved > rhsSaved
+    }
 }
 
 /// CSV から読み取った1つの表

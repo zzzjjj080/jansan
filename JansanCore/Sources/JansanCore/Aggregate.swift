@@ -15,6 +15,13 @@ public struct GameForStats: Equatable, Sendable {
 
     /// この対局の人数。3人局と4人局を混ぜないための鍵になる
     public var playerCount: Int { session.players.count }
+
+    /// 打ち方。三麻なら3、四麻なら4。**集計はこれで分ける。**
+    ///
+    /// 5人で回す四麻も四麻。人数で分けると「5人打ち」という打ち方が無いものが出てしまう。
+    /// **`playersPerRound` をそのまま使わない。** 三麻/四麻を選べるようになる前の3人の表は、
+    /// 保存に項目が無く既定の4で読まれる。参加人数より多くは打てないので小さい方を取る
+    public var style: Int { min(session.playersPerRound, session.players.count) }
 }
 
 /// 集計する期間。
@@ -174,9 +181,9 @@ public enum Aggregator {
         now: Date = .now,
         calendar: Calendar = .current
     ) -> [(name: String, values: [Int])] {
-        let targets = filter(games: games, period: period, playerCount: playerCount,
-                             decimalMode: decimalMode, now: now, calendar: calendar)
-            .sorted { $0.playedAt < $1.playedAt }
+        // 日付が同じ（日付未記入どうしなど）ときに並びが揺れないよう、元の順を保って並べる
+        let targets = Report.chronological(filter(games: games, period: period, playerCount: playerCount,
+                                                  decimalMode: decimalMode, now: now, calendar: calendar))
 
         var order: [String] = []
         var running = [String: Int]()

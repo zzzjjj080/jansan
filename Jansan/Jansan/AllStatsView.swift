@@ -3,11 +3,11 @@ import SwiftData
 import Charts
 import JansanCore
 
-/// 保存した記録をまたいだ集計。
+/// 保存した記録をまたいだ集計。ディレクトリごとに開く。
 ///
-/// 1つの表の中を見る `StatsView` とは別物。
-/// **人数を必ず選ばせる。** 3人局と4人局を混ぜると着順率の分母が変わり、
-/// 数字の意味が壊れる。表示モードも同じ理由で分ける（混ぜると10倍ズレる）。
+/// **打ち方（三麻/四麻）で必ず分ける。** 着順の分母が変わるので、混ぜた数字は比べられない。
+/// **人数では分けない。** 5人で回す四麻も四麻で、「5人打ち」という打ち方は無い。
+/// 表示モードも分ける（混ぜると10倍ズレる）。
 struct AllStatsView: View {
     /// 絞るディレクトリ。nil なら全部
     var directory: Directory? = nil
@@ -22,7 +22,7 @@ struct AllStatsView: View {
     }
 
     @State private var period: Period = .all
-    @State private var playerCount: Int?
+    @State private var style: Int?
     @State private var decimalMode: Bool?
     @State private var soloed: String?
     @State private var showImages = false
@@ -61,54 +61,90 @@ struct AllStatsView: View {
         }
     }
 
-    private var availableCounts: [Int] { Aggregator.availablePlayerCounts(games: games) }
+    /// 1回の描画で1度だけ数える。プロパティのままだと、表・ハイライト・グラフが
+    /// それぞれ全対局を数え直す
+    private struct Computed {
+        let selected: [GameForStats]
+        /// 初めて出てきた順。色の割り当てはこの並びで決める（表を並べ替えても色が変わらない）
+        let reports: [PlayerReport]
+        /// 合計の多い順。表に使う
+        let ranked: [PlayerReport]
+        let roundCount: Int
+        let unknownDateGames: Int
+        let seats: Int
+        let decimalMode: Bool
+        let series: [Series]
 
-    /// 記録の中に小数モードと整数モードが混ざっているときだけ、切り替えを出す
+        func color(_ name: String) -> Color {
+            let index = reports.firstIndex { $0.name == name } ?? 0
+            return Palette.playerColors[index % Palette.playerColors.count]
+        }
+    }
+
+    private func compute() -> Computed {
+        let all = games
+        let selected = Report.select(games: all, period: period.core, style: style, decimalMode: decimalMode)
+        let reports = Report.players(games: selected)
+        let ranked = reports.enumerated()
+            .sorted { $0.element.total != $1.element.total ? $0.element.total > $1.element.total : $0.offset < $1.offset }
+            .map(\.element)
+        let decimal = decimalMode ?? (selected.filter(\.session.decimalMode).count * 2 > selected.count)
+        let seats = style ?? max(3, reports.map(\.rankCounts.count).max() ?? 4)
+        // 期間で絞ったときに落ちた「日付未記入」の対局。黙って消えると件数が合わない
+        let unknown = period == .all ? 0 : Report.select(games: all, style: style, decimalMode: decimalMode)
+            .filter { PlayedDate.isUnknown($0.playedAt) }.count
+
+        let partial = Computed(selected: selected, reports: reports, ranked: ranked,
+                               roundCount: Report.roundCount(games: selected), unknownDateGames: unknown,
+                               seats: seats, decimalMode: decimal, series: [])
+        let series = Aggregator.cumulative(games: selected).map { item in
+            Series(id: item.name, color: partial.color(item.name), points: item.values)
+        }
+        return Computed(selected: selected, reports: reports, ranked: ranked,
+                        roundCount: partial.roundCount, unknownDateGames: unknown,
+                        seats: seats, decimalMode: decimal, series: series)
+    }
+
     private var hasMixedDecimalModes: Bool {
         Set(games.map(\.session.decimalMode)).count > 1
     }
 
-    private var selected: [GameForStats] {
-        Aggregator.filter(games: games, period: period.core,
-                          playerCount: playerCount, decimalMode: decimalMode)
-    }
-
-    private var stats: [AggregatedStats] {
-        Aggregator.aggregate(games: games, period: period.core,
-                             playerCount: playerCount, decimalMode: decimalMode)
-    }
-
-    /// 表示に使うモード。絞っていないときは多数派に合わせる
-    private var displayDecimalMode: Bool {
-        decimalMode ?? (selected.filter(\.session.decimalMode).count * 2 > selected.count)
-    }
-
     var body: some View {
+        let data = compute()
+        let styles = Report.availableStyles(games: games)
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    filters
+                    filters(styles: styles)
                     if records.isEmpty {
                         ContentUnavailableView(
                             "まだ記録がありません",
                             systemImage: "tray",
-                            description: Text("設定の「この対局を記録に残す」で保存すると、ここでまとめて集計できます。")
+                            description: Text("入力画面の保存ボタンで残すと、ここでまとめて集計できます。")
                         )
                         .padding(.top, 30)
-                    } else if stats.isEmpty {
+                    } else if data.reports.isEmpty {
                         ContentUnavailableView(
                             "この条件に合う対局がありません",
                             systemImage: "line.3.horizontal.decrease.circle",
-                            description: Text("期間や人数を変えてみてください。")
+                            description: Text("期間や打ち方を変えてみてください。")
                         )
                         .padding(.top, 30)
                     } else {
-                        summary
+                        summary(data)
+                        heading("ハイライト")
+                        highlights(data)
                         heading("成績")
-                        ScrollView(.horizontal, showsIndicators: false) { table }
+                        table(data)
+                        heading("着順の割合")
+                        rankChart(data)
                         heading("推移（局ごとの累計）")
-                        chart
-                        legend
+                        chart(data)
+                        legend(data)
+                        Text("・名前をタップすると、その人の詳しい成績と相性が見られます\n・着順は局ごとに付けています。同点は表の左の人が上です")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Palette.inkDim)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .padding(16)
@@ -116,6 +152,10 @@ struct AllStatsView: View {
             .background(Palette.bg)
             .navigationTitle(directory.map { "\($0.name)の集計" } ?? "全記録のビュー")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: String.self) { name in
+                PlayerStatsView(name: name, games: data.selected, decimalMode: data.decimalMode,
+                                seats: data.seats, color: data.color(name))
+            }
             .toolbar {
                 ToolbarItem(placement: .navigation) {
                     Button {
@@ -123,7 +163,7 @@ struct AllStatsView: View {
                     } label: {
                         Label("画像で送る", systemImage: "photo.on.rectangle.angled")
                     }
-                    .disabled(stats.isEmpty)
+                    .disabled(data.reports.isEmpty)
                     .accessibilityIdentifier("makeImages")
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -133,21 +173,20 @@ struct AllStatsView: View {
             .sheet(isPresented: $showImages) {
                 ShareImagesSheet(
                     title: directory?.name ?? "麻雀の成績",
-                    subtitle: "\(period.label)・\(playerCount.map { "\($0)人打ち" } ?? "すべて")・\(selected.count)対局",
-                    latest: latestRows,
+                    subtitle: "\(period.label)・\(StatsFormat.styleLabel(style))・\(data.selected.count)対局",
+                    latest: latestRows(data),
                     latestHeaders: ["順位", "点数"],
-                    totals: totalsRows,
+                    totals: totalsRows(data),
                     totalsHeaders: ["対局", "合計", "平着", "トップ"],
-                    series: series.map { (name: $0.id, color: $0.color, points: $0.points) },
-                    decimalMode: displayDecimalMode
+                    series: data.series.map { (name: $0.id, color: $0.color, points: $0.points) },
+                    decimalMode: data.decimalMode
                 )
             }
         }
         .onAppear {
-            // いちばん多く打っている人数を最初に選んでおく。混ざった数字を最初に見せない
-            if playerCount == nil {
-                let counts = games.map(\.playerCount)
-                playerCount = counts.mostCommon() ?? availableCounts.last
+            // いちばん多く打っている打ち方を最初に選ぶ。混ざった数字を最初に見せない
+            if style == nil || !styles.contains(style ?? 0) {
+                style = games.map(\.style).mostCommon() ?? styles.first
             }
         }
     }
@@ -155,15 +194,15 @@ struct AllStatsView: View {
     // MARK: - 画像に載せる中身
 
     /// ①直近の対局。いちばん新しい対局の着順と点数
-    private var latestRows: [ShareImageView.Row] {
-        guard let last = selected.max(by: { $0.playedAt < $1.playedAt }) else { return [] }
+    private func latestRows(_ data: Computed) -> [ShareImageView.Row] {
+        guard let last = data.selected.last else { return [] }
         let ranked = last.session.playerStats()
             .filter { $0.played > 0 }
             .sorted { $0.total > $1.total }
         return ranked.enumerated().map { index, stat in
             ShareImageView.Row(
                 name: stat.name,
-                color: Palette.playerColors[index % Palette.playerColors.count],
+                color: data.color(stat.name),
                 values: ["\(index + 1)位",
                          ScoreFormatter.signedString(stat.total, decimalMode: last.session.decimalMode)],
                 isNegative: [false, stat.total < 0]
@@ -172,23 +211,23 @@ struct AllStatsView: View {
     }
 
     /// ②期間の累計
-    private var totalsRows: [ShareImageView.Row] {
-        stats.enumerated().map { index, stat in
+    private func totalsRows(_ data: Computed) -> [ShareImageView.Row] {
+        data.ranked.map { report in
             ShareImageView.Row(
-                name: stat.name,
-                color: Palette.playerColors[index % Palette.playerColors.count],
-                values: ["\(stat.games)",
-                         ScoreFormatter.signedString(stat.total, decimalMode: displayDecimalMode),
-                         stat.averageRank.map { String(format: "%.2f", $0) } ?? "–",
-                         percent(stat.topRate)],
-                isNegative: [false, stat.total < 0, false, false]
+                name: report.name,
+                color: data.color(report.name),
+                values: ["\(report.games)",
+                         StatsFormat.signed(report.total, data.decimalMode),
+                         StatsFormat.rank(report.averageRank),
+                         StatsFormat.percent(report.topRate)],
+                isNegative: [false, report.total < 0, false, false]
             )
         }
     }
 
     // MARK: - 絞り込み
 
-    private var filters: some View {
+    private func filters(styles: [Int]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Picker("期間", selection: $period) {
                 ForEach(Period.allCases) { Text($0.label).tag($0) }
@@ -196,15 +235,15 @@ struct AllStatsView: View {
             .pickerStyle(.segmented)
             .accessibilityIdentifier("periodPicker")
 
-            if availableCounts.count > 1 {
-                Picker("人数", selection: $playerCount) {
-                    ForEach(availableCounts, id: \.self) { count in
-                        Text("\(count)人打ち").tag(Int?.some(count))
+            // 三麻と四麻の両方があるときだけ出す。混ぜた「すべて」は着順の分母が変わるので置かない
+            if styles.count > 1 {
+                Picker("打ち方", selection: $style) {
+                    ForEach(styles, id: \.self) { value in
+                        Text(StatsFormat.styleLabel(value)).tag(Int?.some(value))
                     }
-                    Text("すべて").tag(Int?.none)
                 }
                 .pickerStyle(.segmented)
-                .accessibilityIdentifier("playerCountPicker")
+                .accessibilityIdentifier("stylePicker")
             }
 
             if hasMixedDecimalModes {
@@ -215,13 +254,10 @@ struct AllStatsView: View {
                 }
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("decimalModePicker")
-            }
 
-            if playerCount == nil && availableCounts.count > 1 {
-                warning("人数の違う対局が混ざっています。着順の分母が変わるため、着順率と平均着順は比べられません。")
-            }
-            if decimalMode == nil && hasMixedDecimalModes {
-                warning("小数モードの記録と整数モードの記録が混ざっています。合計が10倍ズレて見えます。")
+                if decimalMode == nil {
+                    warning("小数モードの記録と整数モードの記録が混ざっています。合計が10倍ズレて見えます。")
+                }
             }
         }
     }
@@ -233,10 +269,17 @@ struct AllStatsView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private var summary: some View {
-        Text("\(selected.count) 対局 ・ \(stats.map(\.played).max() ?? 0) 局")
-            .font(.system(size: 12, weight: .bold))
-            .foregroundStyle(Palette.accent)
+    private func summary(_ data: Computed) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("\(data.selected.count) 対局 ・ \(data.roundCount) 局 ・ \(StatsFormat.styleLabel(style))")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Palette.accent)
+            if data.unknownDateGames > 0 {
+                Text("日付未記入の \(data.unknownDateGames) 対局は「全期間」でだけ数えます")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Palette.inkDim)
+            }
+        }
     }
 
     private func heading(_ text: String) -> some View {
@@ -246,116 +289,210 @@ struct AllStatsView: View {
             .foregroundStyle(Palette.inkDim)
     }
 
-    // MARK: - 成績表
+    // MARK: - ハイライト
 
-    private var rankColumns: [Int] {
-        let highest = stats.flatMap { $0.rankCounts.keys }.max() ?? 0
-        return Array(1...max(playerCount ?? 4, highest))
+    private struct Highlight: Identifiable {
+        let id: String
+        let name: String
+        let value: String
+        let color: Color
     }
 
-    private var table: some View {
-        Grid(horizontalSpacing: 0, verticalSpacing: 0) {
-            GridRow {
-                Text("").gridColumnAlignment(.leading)
-                headerCell("対局")
-                headerCell("合計")
-                headerCell("平均")
-                ForEach(rankColumns, id: \.self) { headerCell("\($0)位") }
-                headerCell("平着")
-                headerCell("トップ")
-                headerCell("ラス")
-            }
-            .padding(.bottom, 6)
+    private func highlightItems(_ data: Computed) -> [Highlight] {
+        let reports = data.reports
+        let decimal = data.decimalMode
+        var items: [Highlight] = []
+        func add(_ title: String, _ report: PlayerReport?, _ value: (PlayerReport) -> String) {
+            guard let report else { return }
+            items.append(Highlight(id: title, name: report.name, value: value(report), color: data.color(report.name)))
+        }
 
-            ForEach(Array(stats.enumerated()), id: \.offset) { _, stat in
-                GridRow {
-                    Text(stat.name)
-                        .font(.system(size: 12.5, weight: .bold))
-                        .foregroundStyle(Palette.ink)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .gridColumnAlignment(.leading)
-                        .padding(.trailing, 10)
+        add("最多トップ", reports.max { $0.count(ofRank: 1) < $1.count(ofRank: 1) }) {
+            "\($0.count(ofRank: 1))回"
+        }
+        add("最高の1局", reports.max { ($0.bestRound ?? .min) < ($1.bestRound ?? .min) }) {
+            StatsFormat.signed($0.bestRound ?? 0, decimal)
+        }
+        add("連続トップ", reports.max { $0.longestTopStreak < $1.longestTopStreak }) {
+            "\($0.longestTopStreak)連続"
+        }
+        add("最高の対局", reports.max { ($0.bestGame ?? .min) < ($1.bestGame ?? .min) }) {
+            StatsFormat.signed($0.bestGame ?? 0, decimal)
+        }
+        // 数局しか打っていない人の率は当てにならない。5局以上に絞る
+        let regulars = reports.filter { $0.rounds >= 5 }
+        add("ラス回避率", regulars.max { ($0.lastAvoidRate ?? 0) < ($1.lastAvoidRate ?? 0) }) {
+            StatsFormat.percent($0.lastAvoidRate)
+        }
+        add("いちばん安定", regulars.filter { $0.spread != nil }.min { ($0.spread ?? 0) < ($1.spread ?? 0) }) {
+            "ばらつき " + StatsFormat.spread($0.spread, decimal)
+        }
+        return items
+    }
 
-                    numberCell("\(stat.games)")
-                    numberCell(ScoreFormatter.string(stat.total, decimalMode: displayDecimalMode),
-                               negative: stat.total < 0)
-                    numberCell(stat.averageScore.map {
-                        ScoreFormatter.string(Int($0.rounded()), decimalMode: displayDecimalMode)
-                    } ?? "–", negative: (stat.averageScore ?? 0) < 0)
-
-                    ForEach(rankColumns, id: \.self) { rank in
-                        Text("\(stat.count(ofRank: rank))")
-                            .font(.system(size: 12.5, weight: stat.count(ofRank: rank) > 0 ? .bold : .regular))
-                            .monospacedDigit()
-                            .foregroundStyle(Palette.ink)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .background(heatColor(stat.count(ofRank: rank)),
-                                        in: RoundedRectangle(cornerRadius: 6))
-                    }
-
-                    numberCell(stat.averageRank.map { String(format: "%.2f", $0) } ?? "–")
-                    numberCell(percent(stat.topRate))
-                    numberCell(percent(stat.lastRate))
-                }
-                .padding(.vertical, 2)
-                // マス単位で読ませると数字だけが並んで意味が取れない。行ごとにまとめる
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(spoken(stat))
+    private func highlights(_ data: Computed) -> some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)],
+                  spacing: 10) {
+            ForEach(highlightItems(data)) { item in
+                card(item)
             }
         }
     }
 
-    private func headerCell(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(Palette.inkDim)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 4)
+    private func card(_ item: Highlight) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(item.id)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Palette.inkDim)
+            Text(item.value)
+                .font(.system(size: 20, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(Palette.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            HStack(spacing: 5) {
+                Circle().fill(item.color).frame(width: 7, height: 7)
+                Text(item.name)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Palette.inkDim)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Palette.surface, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Palette.line))
+        .accessibilityElement(children: .combine)
     }
 
-    private func numberCell(_ text: String, negative: Bool = false) -> some View {
+    // MARK: - 成績表
+
+    private static let nameWidth: CGFloat = 78
+    private static let cellWidth: CGFloat = 50
+    private static let columns = ["対局", "局", "合計", "平均", "平着", "トップ", "連対", "ラス"]
+
+    private func table(_ data: Computed) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    Color.clear.frame(width: Self.nameWidth, height: 1)
+                    ForEach(Self.columns, id: \.self) { title in
+                        Text(title)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Palette.inkDim)
+                            .frame(width: Self.cellWidth)
+                    }
+                }
+                .padding(.bottom, 6)
+
+                ForEach(data.ranked) { report in
+                    NavigationLink(value: report.name) {
+                        row(report, data)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("statsRow-\(report.name)")
+                    Divider()
+                }
+            }
+        }
+    }
+
+    private func row(_ report: PlayerReport, _ data: Computed) -> some View {
+        HStack(spacing: 0) {
+            HStack(spacing: 5) {
+                Circle().fill(data.color(report.name)).frame(width: 7, height: 7)
+                Text(report.name)
+                    .font(.system(size: 12.5, weight: .bold))
+                    .foregroundStyle(Palette.ink)
+                    .lineLimit(1)
+            }
+            .frame(width: Self.nameWidth, alignment: .leading)
+
+            cell("\(report.games)")
+            cell("\(report.rounds)")
+            cell(StatsFormat.score(report.total, data.decimalMode), negative: report.total < 0)
+            cell(StatsFormat.average(report.averageScore, data.decimalMode),
+                 negative: (report.averageScore ?? 0) < 0)
+            cell(StatsFormat.rank(report.averageRank))
+            cell(StatsFormat.percent(report.topRate))
+            cell(StatsFormat.percent(report.rentaiRate))
+            cell(StatsFormat.percent(report.lastRate))
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(Palette.inkDim)
+                .padding(.leading, 4)
+        }
+        .padding(.vertical, 9)
+        .contentShape(Rectangle())
+        // マス単位で読ませると数字だけが並んで意味が取れない。行ごとにまとめる
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spoken(report, data))
+    }
+
+    private func cell(_ text: String, negative: Bool = false) -> some View {
         Text(text)
             .font(.system(size: 12.5, weight: .semibold))
             .monospacedDigit()
             .foregroundStyle(negative ? Palette.negative : Palette.ink)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 4)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .frame(width: Self.cellWidth)
     }
 
-    /// 1行ぶんの読み上げ。数字だけを並べても意味が伝わらないので、項目名を添える
-    private func spoken(_ stat: AggregatedStats) -> String {
-        var parts = ["\(stat.name)",
-                     "\(stat.games)対局",
-                     "合計 \(ScoreFormatter.signedString(stat.total, decimalMode: displayDecimalMode))"]
-        if let rank = stat.averageRank { parts.append("平均着順 \(String(format: "%.2f", rank))") }
-        if let top = stat.topRate { parts.append("トップ率 \(Int((top * 100).rounded()))パーセント") }
-        if let last = stat.lastRate { parts.append("ラス率 \(Int((last * 100).rounded()))パーセント") }
+    private func spoken(_ report: PlayerReport, _ data: Computed) -> String {
+        var parts = [report.name, "\(report.games)対局", "\(report.rounds)局",
+                     "合計 \(StatsFormat.signed(report.total, data.decimalMode))"]
+        if let rank = report.averageRank { parts.append("平均着順 \(String(format: "%.2f", rank))") }
+        parts.append("トップ率 \(StatsFormat.percent(report.topRate))")
+        parts.append("ラス率 \(StatsFormat.percent(report.lastRate))")
         return parts.joined(separator: "、")
     }
 
-    private func percent(_ value: Double?) -> String {
-        guard let value else { return "–" }
-        return "\(Int((value * 100).rounded()))%"
+    // MARK: - 着順の割合
+
+    private struct RankShare: Identifiable {
+        let id: String
+        let name: String
+        let rank: String
+        let rate: Double
     }
 
-    private var heatMax: Int {
-        max(1, stats.flatMap { s in rankColumns.map { s.count(ofRank: $0) } }.max() ?? 1)
+    private func rankShares(_ data: Computed) -> [RankShare] {
+        data.ranked.flatMap { report in
+            (1...data.seats).map { rank in
+                RankShare(id: "\(report.name)-\(rank)", name: report.name, rank: "\(rank)位",
+                          rate: report.rounds > 0 ? Double(report.count(ofRank: rank)) / Double(report.rounds) : 0)
+            }
+        }
     }
 
-    private func heatColor(_ count: Int) -> Color {
-        guard count > 0 else { return Palette.inkDim.opacity(0.10) }
-        let t = Double(count) / Double(heatMax)
-        let base = t <= 0.5
-            ? Palette.inkDim.mix(with: Palette.toneBInk, by: t / 0.5)
-            : Palette.toneBInk.mix(with: Palette.negative, by: (t - 0.5) / 0.5)
-        return base.opacity(0.20 + t * 0.45)
+    private func rankChart(_ data: Computed) -> some View {
+        let shares = rankShares(data)
+        let names = data.ranked.map(\.name)
+        let ranks = (1...data.seats).map { "\($0)位" }
+        let colors = (1...data.seats).map { StatsFormat.rankColor($0, seats: data.seats) }
+        return Chart(shares) { share in
+            BarMark(x: .value("割合", share.rate), y: .value("名前", share.name))
+                .foregroundStyle(by: .value("着順", share.rank))
+        }
+        .chartForegroundStyleScale(domain: ranks, range: colors)
+        .chartYScale(domain: names)
+        .chartXAxis {
+            AxisMarks(values: [0.0, 0.25, 0.5, 0.75, 1.0]) { value in
+                AxisGridLine()
+                AxisValueLabel {
+                    if let rate = value.as(Double.self) { Text("\(Int(rate * 100))%") }
+                }
+            }
+        }
+        .chartLegend(position: .bottom, alignment: .leading)
+        .frame(height: CGFloat(max(2, names.count)) * 32 + 48)
     }
 
     // MARK: - 推移
 
-    private struct Series: Identifiable {
+    fileprivate struct Series: Identifiable {
         let id: String
         let color: Color
         let points: [Int]
@@ -373,31 +510,19 @@ struct AllStatsView: View {
         }
     }
 
-    private var series: [Series] {
-        Aggregator.cumulative(games: games, period: period.core,
-                              playerCount: playerCount, decimalMode: decimalMode)
-            .enumerated()
-            .map { index, item in
-                Series(id: item.name,
-                       color: Palette.playerColors[index % Palette.playerColors.count],
-                       points: item.values)
-            }
-    }
-
     /// 目盛りの位置。局数は整数なので、小数のラベルが出ないよう自分で並べる
-    private var xTicks: [Int] {
-        let count = series.first?.points.count ?? 0
+    private func xTicks(_ data: Computed) -> [Int] {
+        let count = data.series.first?.points.count ?? 0
         guard count > 0 else { return [0] }
         let step = Swift.max(1, count / 5)
         return Array(stride(from: step, through: count, by: step))
     }
 
-    private var chart: some View {
+    private func chart(_ data: Computed) -> some View {
         Chart {
-            ForEach(series) { line in
+            ForEach(data.series) { line in
                 ForEach(line.plotted) { point in
-                    // series: を渡さないと、全員の点が1本の線として繋がってしまう。
-                    // 型チェック回避で .foregroundStyle(by:) を外したときに、この役目も一緒に消えていた
+                    // series: を渡さないと、全員の点が1本の線として繋がってしまう
                     LineMark(
                         x: .value("局", point.index),
                         y: .value("累計", point.value),
@@ -410,8 +535,7 @@ struct AllStatsView: View {
         }
         .chartLegend(.hidden)
         .chartXAxis {
-            // 対局数は整数。目盛りの位置を自分で並べて、小数のラベルを出さない
-            AxisMarks(values: xTicks) { value in
+            AxisMarks(values: xTicks(data)) { value in
                 AxisGridLine()
                 AxisValueLabel {
                     if let n = value.as(Int.self) { Text("\(n)") }
@@ -421,10 +545,10 @@ struct AllStatsView: View {
         .frame(height: 220)
     }
 
-    private var legend: some View {
-        // 凡例をタップすると1人だけ強調する。既存のビューと同じ操作にしてある
+    private func legend(_ data: Computed) -> some View {
+        // 凡例をタップすると1人だけ強調する
         FlowRow(spacing: 8) {
-            ForEach(series) { line in
+            ForEach(data.series) { line in
                 Button {
                     soloed = soloed == line.id ? nil : line.id
                 } label: {

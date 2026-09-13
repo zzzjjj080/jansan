@@ -176,7 +176,23 @@ final class NewFeaturesUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(count, 2, "対局数が足りない: \(summary.label)")
         XCTAssertTrue(app.buttons["periodPicker"].waitForExistence(timeout: 5)
                       || app.segmentedControls.firstMatch.exists, "期間の切り替えが無い")
+        // 人数ではなく打ち方で分ける。「5人打ち」のような選択肢は出さない
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label ENDSWITH '人打ち'")).firstMatch.exists,
+                       "集計に人数の切り替えが残っている")
+        XCTAssertTrue(app.staticTexts["ハイライト"].exists, "ハイライトが無い")
         attach(app, "全記録のビュー")
+
+        // 名前をタップすると、1人ぶんの詳しい成績と相性
+        let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'statsRow-'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "成績の行が無い")
+        XCTAssertTrue(scrollTo(app, row), "成績の行に届かない")
+        row.tap()
+        XCTAssertTrue(app.staticTexts["着順"].waitForExistence(timeout: 10), "詳しい成績が開かない")
+        attach(app, "1人の詳しい成績")
+        let matchup = app.staticTexts["相性"]
+        for _ in 0..<8 where !matchup.exists { app.swipeUp() }
+        XCTAssertTrue(matchup.exists, "相性が無い")
+        attach(app, "相性")
     }
 
     // MARK: - バックアップ

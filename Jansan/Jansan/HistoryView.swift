@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import JansanCore
 
 /// ディレクトリ1つぶんの記録の一覧。DirectoryView の中身として置かれる
 struct HistoryView: View {
@@ -16,9 +17,16 @@ struct HistoryView: View {
     )
     private var allRecords: [SavedGame]
 
-    /// このディレクトリの分だけ。directoryId が nil の古い記録は「マイ記録」
+    /// このディレクトリの分だけ。directoryId が nil の古い記録は「マイ記録」。
+    /// **対局日の新しい順に並べる。** 保存した順だと、後日まとめて入れた記録や
+    /// CSV で取り込んだ記録が上に来て、いつの対局か追えない。日付未記入は最後
     private var records: [SavedGame] {
-        allRecords.filter { ($0.directoryId ?? Directory.defaultUID) == directory.uid }
+        allRecords
+            .filter { ($0.directoryId ?? Directory.defaultUID) == directory.uid }
+            .sorted {
+                PlayedDate.newestFirst(played: $0.playedAt, saved: $0.savedAt,
+                                       before: $1.playedAt, saved: $1.savedAt)
+            }
     }
 
     @State private var viewing: SavedGame?
