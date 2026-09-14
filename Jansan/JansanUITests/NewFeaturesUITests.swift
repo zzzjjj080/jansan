@@ -184,8 +184,8 @@ final class NewFeaturesUITests: XCTestCase {
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label ENDSWITH '人打ち'")).firstMatch.exists,
                        "集計に人数の切り替えが残っている")
         XCTAssertTrue(app.staticTexts["ハイライト"].exists, "ハイライトが無い")
-        // 期間は 全期間・最近30日・今年 の3つ
-        XCTAssertTrue(app.buttons["最近30日"].exists, "「最近30日」が無い")
+        // 期間は 全期間・最近20局・今年 の3つ（最近は日付ではなく局で区切る）
+        XCTAssertTrue(app.buttons["最近20局"].exists, "「最近20局」が無い")
         XCTAssertFalse(app.buttons["先月"].exists, "外したはずの期間が残っている")
         XCTAssertFalse(app.staticTexts["いちばん安定"].exists, "ばらつきのハイライトが残っている")
         XCTAssertTrue(app.descendants(matching: .any)["latestRecord"].exists, "最近の記録が出ていない")

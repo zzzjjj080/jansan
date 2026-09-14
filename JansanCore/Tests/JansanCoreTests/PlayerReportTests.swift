@@ -266,3 +266,35 @@ struct RecentWindowTests {
         #expect(a.total == 30)
     }
 }
+
+@Suite("最近20局で区切る")
+struct LatestRoundsTests {
+
+    @Test("新しい方から数え、境目の対局は新しい局だけ残す")
+    func trimsAtBoundary() {
+        let older = game(abcd, [[10, -10, 5, -5], [20, -20, 5, -5], [30, -30, 5, -5]], day: 1)
+        let newer = game(abcd, [[40, -40, 5, -5], [50, -50, 5, -5]], day: 2)
+        let kept = Report.latest(games: [older, newer], rounds: 3)
+        #expect(Report.roundCount(games: kept) == 3)
+        // 古い対局からは、いちばん新しい 30 の局だけが残る
+        #expect(report("A", in: Report.players(games: kept)).total == 30 + 40 + 50)
+        #expect(kept.map(\.playedAt) == [older.playedAt, newer.playedAt])
+    }
+
+    @Test("局が足りなければ全部")
+    func fewerRounds() {
+        let only = game(abcd, [[10, -10, 5, -5], [20, -20, 5, -5]])
+        let kept = Report.latest(games: [only], rounds: 20)
+        #expect(Report.roundCount(games: kept) == 2)
+        #expect(report("A", in: Report.players(games: kept)).total == 30)
+    }
+
+    @Test("新しさは対局日の順。配列の並びではない。三麻の打ち方も保つ")
+    func ordersByDateAndKeepsStyle() {
+        let newer = game(["A", "B", "C"], [[30, -10, -20]], style: 3, day: 5)
+        let older = game(["A", "B", "C"], [[-30, 10, 20], [-40, 20, 20]], style: 3, day: 1)
+        let kept = Report.latest(games: [newer, older], rounds: 2)
+        #expect(report("A", in: Report.players(games: kept)).total == 30 - 40)
+        #expect(kept.allSatisfy { $0.style == 3 })
+    }
+}

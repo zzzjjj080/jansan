@@ -34,21 +34,22 @@ struct AllStatsView: View {
     @State private var showImages = false
 
     /// 画面に出す期間の選択肢。Core の StatsPeriod は custom を持つが、
-    /// ここでは日付の入力欄を作らず、よく使う範囲だけに絞る
+    /// ここでは日付の入力欄を作らず、よく使う範囲だけに絞る。
+    /// **「最近20局」は日付ではなく局で区切る**（本人の指示で「最近30日」から変更）
     private enum Period: String, CaseIterable, Identifiable {
-        case all, last30, thisYear
+        case all, latestRounds, thisYear
         var id: String { rawValue }
         var label: String {
             switch self {
             case .all: "全期間"
-            case .last30: "最近30日"
+            case .latestRounds: "最近\(Report.latestRoundsPeriod)局"
             case .thisYear: "今年"
             }
         }
+        /// 日付で絞る範囲。局で区切るものは日付では絞らない
         var core: StatsPeriod {
             switch self {
-            case .all: .all
-            case .last30: .last30Days
+            case .all, .latestRounds: .all
             case .thisYear: .thisYear
             }
         }
@@ -89,7 +90,8 @@ struct AllStatsView: View {
     private func compute() -> Computed {
         let all = games
         let colorOrder = Report.players(games: all).map(\.name)
-        let selected = Report.select(games: all, period: period.core, style: style, decimalMode: decimalMode)
+        let filtered = Report.select(games: all, period: period.core, style: style, decimalMode: decimalMode)
+        let selected = period == .latestRounds ? Report.latest(games: filtered) : filtered
         let reports = Report.players(games: selected)
         let ranked = reports.enumerated()
             .sorted { $0.element.total != $1.element.total ? $0.element.total > $1.element.total : $0.offset < $1.offset }
@@ -97,7 +99,7 @@ struct AllStatsView: View {
         let decimal = decimalMode ?? (selected.filter(\.session.decimalMode).count * 2 > selected.count)
         let seats = style ?? max(3, reports.map(\.rankCounts.count).max() ?? 4)
         // 期間で絞ったときに落ちた「日付未記入」の対局。黙って消えると件数が合わない
-        let unknown = period == .all ? 0 : Report.select(games: all, style: style, decimalMode: decimalMode)
+        let unknown = period != .thisYear ? 0 : Report.select(games: all, style: style, decimalMode: decimalMode)
             .filter { PlayedDate.isUnknown($0.playedAt) }.count
 
         let partial = Computed(selected: selected, reports: reports, ranked: ranked,

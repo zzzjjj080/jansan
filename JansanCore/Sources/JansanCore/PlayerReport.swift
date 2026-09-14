@@ -108,6 +108,34 @@ public enum Report {
     /// 「絶好調」で見る局数（卓全体の直近で数える）
     public static let hotWindow = 20
 
+    /// 集計の期間「最近20局」で見る局数。日付ではなく局で区切る（本人の指示で「最近30日」から変更）
+    public static let latestRoundsPeriod = 20
+
+    /// 選んだ対局のうち、**卓全体でいちばん新しい `rounds` 局**だけを残す。
+    ///
+    /// 対局日の順に新しい方から数え、境目の対局は**新しい方の局だけを残した表**にする。
+    /// 入力途中の局と、1局も終わっていない対局は数えない
+    public static func latest(games: [GameForStats], rounds: Int = latestRoundsPeriod) -> [GameForStats] {
+        var remaining = rounds
+        var kept: [GameForStats] = []
+        for game in chronological(games).reversed() {
+            guard remaining > 0 else { break }
+            let completed = completedRounds(of: game.session)
+            guard !completed.isEmpty else { continue }
+            if completed.count <= remaining {
+                kept.append(game)
+                remaining -= completed.count
+            } else {
+                let s = game.session
+                let trimmed = Session(players: s.players, rounds: Array(completed.suffix(remaining)),
+                                      decimalMode: s.decimalMode, playersPerRound: s.playersPerRound)
+                kept.append(GameForStats(playedAt: game.playedAt, session: trimmed))
+                remaining = 0
+            }
+        }
+        return kept.reversed()
+    }
+
     /// 選んだ対局の中で、**いちばん新しい `window` 局**だけを見た成績。
     ///
     /// **その人が打った直近ではなく、卓全体の直近で切る。** その人の直近で数えると、
