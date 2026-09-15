@@ -117,6 +117,8 @@ struct SubscribeView: View {
         dir.decimalMode = doc.decimalMode
         dir.lastFetchedAt = .now
         DirectoryStore.replaceGames(of: dir, with: doc.backup, in: context)
+        // 送り主が「何人が受け取っているか」を見られるよう、票を置く（失敗しても受け取りは済んでいる）
+        Task { await ShareClient.recordReceipt(id: id, password: pw) }
         dismiss()
     }
 }

@@ -30,7 +30,24 @@ enum SharePublisher {
             directory.decimalMode = doc.decimalMode
             directory.lastFetchedAt = .now
             DirectoryStore.replaceGames(of: directory, with: doc.backup, in: context)
+            let id = directory.shareID, pw = directory.sharePassword
+            Task { await ShareClient.recordReceipt(id: id, password: pw) }
         }
+    }
+
+    /// **CloudKit の接続先を本番（Production）にそろえた**（2026-09-15）。
+    ///
+    /// それまで実機に入れていた開発用ビルドは開発環境（Development）に繋がっていて、
+    /// そこで共有したものは App Store 版から「見つかりませんでした」になった。
+    /// 共有中のディレクトリに送り直しの印を1回だけ付け、本番へ置き直す
+    static func markSharesForProductionOnce(in context: ModelContext) {
+        let key = "sharesRepublishedToProduction"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        for directory in DirectoryStore.all(in: context) where directory.isShared && !directory.isSubscribed {
+            directory.needsPublish = true
+        }
+        try? context.save()
+        UserDefaults.standard.set(true, forKey: key)
     }
 
     static func publish(_ directory: Directory, in context: ModelContext) async {

@@ -101,6 +101,83 @@ enum ShareClient {
         }
     }
 
+    // MARK: - 受け取り票（何人が受け取っているか）
+
+    /// この端末の乱数。受け取り票に書く。端末ごとに1つで、作り直さない
+    private static var installID: String {
+        let key = "shareInstallID"
+        if let id = UserDefaults.standard.string(forKey: key) { return id }
+        let id = UUID().uuidString
+        UserDefaults.standard.set(id, forKey: key)
+        return id
+    }
+
+    /// その共有の票を全枠まとめて取る。無い枠は入らない
+    private static func receipts(share: String) async throws -> [String: CKRecord] {
+        let ids = ShareReceipt.allRecordNames(share: share).map { CKRecord.ID(recordName: $0) }
+        var found: [String: CKRecord] = [:]
+        for (recordID, result) in try await database.records(for: ids) {
+            if case .success(let record) = result { found[recordID.recordName] = record }
+        }
+        return found
+    }
+
+    /// 受け取った端末が票を置く。もう置いてあれば「最後に見た日時」だけ更新する。
+    ///
+    /// **失敗しても黙る。** 票は人数を数えるためのおまけで、受け取り自体を止める理由にならない。
+    /// iCloud にサインインしていない端末は書けないので、数に入らない
+    static func recordReceipt(id: String, password: String) async {
+        guard await accountAvailable() else { return }
+        let share = ShareCrypto.recordName(id: id, password: password)
+        let mine = installID
+        guard let found = try? await receipts(share: share) else { return }
+
+        // 先に自分の票を探す。空いた枠に作り直すと、1台で2枚になる
+        var candidates: [CKRecord] = []
+        if let own = found.values.first(where: { ($0["installID"] as? String) == mine }) {
+            candidates = [own]
+        } else {
+            candidates = ShareReceipt.slotOrder(installID: mine)
+                .map { ShareReceipt.recordName(share: share, slot: $0) }
+                .filter { found[$0] == nil }
+                .prefix(3)
+                .map { name in
+                    let record = CKRecord(recordType: ShareReceipt.recordType, recordID: CKRecord.ID(recordName: name))
+                    record["installID"] = mine
+                    record["share"] = share
+                    return record
+                }
+        }
+        for record in candidates {
+            record["lastSeenAt"] = Date.now
+            do {
+                _ = try await database.save(record)
+                return
+            } catch let error as CKError where error.code == .serverRecordChanged {
+                continue   // 同じ瞬間に他の端末がその枠を取った。次の空きへ
+            } catch {
+                return
+            }
+        }
+    }
+
+    /// 受け取るのをやめた端末が、自分の票を消す
+    static func removeReceipt(id: String, password: String) async {
+        let share = ShareCrypto.recordName(id: id, password: password)
+        let mine = installID
+        guard let found = try? await receipts(share: share) else { return }
+        for record in found.values where (record["installID"] as? String) == mine {
+            _ = try? await database.deleteRecord(withID: record.recordID)
+        }
+    }
+
+    /// 送った側に出す「何人が受け取っているか」。通信できなければ nil
+    static func receiptSummary(id: String, password: String) async -> ShareReceipt.Summary? {
+        let share = ShareCrypto.recordName(id: id, password: password)
+        guard let found = try? await receipts(share: share) else { return nil }
+        return ShareReceipt.Summary(lastSeen: found.values.compactMap { $0["lastSeenAt"] as? Date })
+    }
+
     // MARK: - 受け取る（購読）
 
     static func fetch(id: String, password: String) async throws -> SharedDirectoryDocument {

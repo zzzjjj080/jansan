@@ -313,6 +313,11 @@ struct RecordsView: View {
             let id = dir.shareID, pw = dir.sharePassword
             Task { try? await ShareClient.unpublish(id: id, password: pw) }
         }
+        // 受け取るのをやめるなら、送り主から見た人数から外れるよう票を消す
+        if dir.isSubscribed {
+            let id = dir.shareID, pw = dir.sharePassword
+            Task { await ShareClient.removeReceipt(id: id, password: pw) }
+        }
         for game in DirectoryStore.games(of: dir, in: context) { context.delete(game) }
         if dir.uid.uuidString == currentDirectoryID {
             currentDirectoryID = Directory.defaultUID.uuidString

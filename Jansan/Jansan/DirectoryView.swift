@@ -184,6 +184,8 @@ struct DirectoryView: View {
             directory.decimalMode = doc.decimalMode
             directory.lastFetchedAt = .now
             DirectoryStore.replaceGames(of: directory, with: doc.backup, in: context)
+            let id = directory.shareID, pw = directory.sharePassword
+            Task { await ShareClient.recordReceipt(id: id, password: pw) }
         } catch let failure as ShareClient.Failure {
             if !silent { refreshError = failure.message }
         } catch {
@@ -196,6 +198,11 @@ struct DirectoryView: View {
         if directory.isShared {
             let id = directory.shareID, pw = directory.sharePassword
             Task { try? await ShareClient.unpublish(id: id, password: pw) }
+        }
+        // 受け取るのをやめるなら、送り主から見た人数から外れるよう票を消す
+        if directory.isSubscribed {
+            let id = directory.shareID, pw = directory.sharePassword
+            Task { await ShareClient.removeReceipt(id: id, password: pw) }
         }
         for game in DirectoryStore.games(of: directory, in: context) { context.delete(game) }
         if isCurrent { currentDirectoryID = Directory.defaultUID.uuidString }

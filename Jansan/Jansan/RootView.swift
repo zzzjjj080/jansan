@@ -61,6 +61,7 @@ struct RootView: View {
             // 1か月たった自動バックアップの控えを消す
             DirectoryStore.pruneAutoBackups(in: context)
             board.attach(context: context)
+            SharePublisher.markSharesForProductionOnce(in: context)
             await SharePublisher.publishPending(in: context)
         }
         // オフラインで保存した分は、次に前面に来たときに送る

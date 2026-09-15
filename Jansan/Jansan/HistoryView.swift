@@ -90,6 +90,20 @@ struct HistoryView: View {
         }
     }
 
+    /// 共有中のとき、何人が受け取っているか（受け取り票の枚数と、最後に見た日時）
+    @State private var receipts: ShareReceipt.Summary?
+    @State private var receiptsLoaded = false
+
+    private var receiptLine: String {
+        guard receiptsLoaded else { return "受け取っている人を数えています…" }
+        guard let receipts else { return "受け取っている人を数えられませんでした（通信できません）" }
+        guard receipts.count > 0 else { return "まだ誰も受け取っていません" }
+        let last = receipts.lastSeen.map {
+            " ・ 最後に見たのは \($0.formatted(.dateTime.month().day().locale(Locale(identifier: "ja_JP"))))"
+        } ?? ""
+        return "\(receipts.count)人が受け取り中\(last)"
+    }
+
     /// 共有しているとき（受け取っているとき）の ID とパスワード。人に伝えるときに読めるよう、長押しで選べる
     @ViewBuilder
     private var shareInfo: some View {
@@ -106,6 +120,12 @@ struct HistoryView: View {
                         .font(.system(size: 14, weight: .semibold, design: .monospaced))
                         .foregroundStyle(Palette.ink)
                         .textSelection(.enabled)
+                    // 送った側だけ。受け取った端末が置いた票を数える（iCloud にサインインしている端末だけが数に入る）
+                    if directory.isShared {
+                        Text(receiptLine)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Palette.accent)
+                    }
                 }
                 Spacer(minLength: 0)
             }
@@ -117,6 +137,11 @@ struct HistoryView: View {
             .padding(.vertical, 6)
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("shareInfo")
+            .task(id: directory.shareID + directory.sharePassword) {
+                guard directory.isShared else { return }
+                receipts = await ShareClient.receiptSummary(id: directory.shareID, password: directory.sharePassword)
+                receiptsLoaded = true
+            }
         }
     }
 
