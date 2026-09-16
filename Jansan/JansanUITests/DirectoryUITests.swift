@@ -167,6 +167,20 @@ final class DirectoryUITests: XCTestCase {
         XCTFail("保存先にできなかった")
     }
 
+    /// ディレクトリの中のメニューから項目を押す。
+    /// **メニューを開くタップは稀に抜ける**（保存先にするときと同じ。出なければ開き直す）
+    private func tapMenuItem(_ app: XCUIApplication, _ identifier: String) {
+        for _ in 0..<3 {
+            app.buttons["directoryMenu"].tap()
+            let item = app.buttons[identifier]
+            if item.waitForExistence(timeout: 5) {
+                item.tap()
+                return
+            }
+        }
+        XCTFail("メニューの「\(identifier)」が出ない")
+    }
+
     /// 起動したら「マイ記録」があり、入力タブが最初に出ること
     func testStartsOnInputAndHasDefaultDirectory() {
         let app = launchApp()
@@ -306,8 +320,7 @@ final class DirectoryUITests: XCTestCase {
         done.buttons["OK"].tap()
 
         // 中のメニューから削除しようとすると断られる
-        app.buttons["directoryMenu"].tap()
-        app.buttons["deleteDirectory"].tap()
+        tapMenuItem(app, "deleteDirectory")
         let locked = app.alerts["このフォルダは削除できません"]
         XCTAssertTrue(locked.waitForExistence(timeout: 10), "記録が2件あるのに削除に進めてしまう")
         attach(app, "削除できないフォルダ")
@@ -559,8 +572,7 @@ final class DirectoryUITests: XCTestCase {
         detailButton(app, name).tap()
         makeCurrentDirectory(app)
 
-        app.buttons["directoryMenu"].tap()
-        app.buttons["deleteDirectory"].tap()
+        tapMenuItem(app, "deleteDirectory")
         XCTAssertTrue(app.alerts.firstMatch.waitForExistence(timeout: 10))
         app.alerts.buttons["削除する"].tap()
 
@@ -704,6 +716,102 @@ extension DirectoryUITests {
         openRecordsTab(app)
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         XCTAssertEqual(recordCount(row.label), saved + 1, "それでも残したのに増えていない: \(row.label)")
+    }
+
+    /// **バックアップから戻すと、フォルダ分けも戻ること。**
+    /// 機種変更のときに全部「マイ記録」に入ってしまうのを防ぐ
+    func testBackupRestoresDirectories() {
+        let app = launchApp()
+        let name = uniqueName("戻")
+        openRecordsTab(app)
+        createDirectory(app, named: name)
+        detailButton(app, name).tap()
+        makeCurrentDirectory(app)
+
+        // そのフォルダに1局だけ残す
+        app.segmentedControls.firstMatch.buttons["入力"].tap()
+        XCTAssertTrue(app.buttons["cell-0-0"].waitForExistence(timeout: 20))
+        app.buttons["cell-0-0"].tap()
+        for key in ["4", "2"] { app.buttons[key].firstMatch.tap() }
+        app.buttons["確定"].tap()
+        tapSave(app)
+
+        // バックアップをコピー
+        openSettings(app)
+        let backup = app.buttons["showBackup"]
+        XCTAssertTrue(scrollTo(app, backup), "バックアップの導線が無い")
+        backup.tap()
+        XCTAssertTrue(app.navigationBars["バックアップ"].waitForExistence(timeout: 15), "バックアップが開かない")
+        app.buttons["copyBackup"].tap()
+        XCTAssertTrue(app.staticTexts["コピーしました"].waitForExistence(timeout: 10), "コピーできていない")
+        app.navigationBars["バックアップ"].buttons["閉じる"].tap()
+
+        // 記録を全部消し、フォルダも消す（機種変更と同じ状態にする）
+        let erase = app.buttons["eraseAll"]
+        XCTAssertTrue(scrollTo(app, erase), "削除の導線が無い")
+        erase.tap()
+        app.alerts.buttons["すべて消す"].tap()
+        XCTAssertTrue(app.alerts["消しました"].waitForExistence(timeout: 15), "削除が終わらない")
+        app.alerts.buttons["OK"].tap()
+
+        openRecordsTab(app)
+        let row = directoryRow(app, name)
+        reveal(app, row)
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "フォルダが見つからない")
+        row.swipeLeft()
+        (app.buttons["Delete"].exists ? app.buttons["Delete"] : app.buttons["削除"]).tap()
+        app.alerts.firstMatch.buttons["削除する"].tap()
+        XCTAssertFalse(row.waitForExistence(timeout: 5), "フォルダが消えていない")
+
+        // 戻す。**設定の歯車は入力タブにしか無い**ので、先に入力へ戻る
+        app.segmentedControls.firstMatch.buttons["入力"].tap()
+        openSettings(app)
+        XCTAssertTrue(scrollTo(app, app.buttons["showBackup"]), "バックアップの導線が無い")
+        app.buttons["showBackup"].tap()
+        XCTAssertTrue(app.navigationBars["バックアップ"].waitForExistence(timeout: 15))
+        let paste = app.buttons["pasteBackup"].exists
+            ? app.buttons["pasteBackup"]
+            : app.buttons.matching(NSPredicate(format: "label CONTAINS 'ペースト' OR label CONTAINS 'Paste'")).firstMatch
+        XCTAssertTrue(paste.waitForExistence(timeout: 10), "貼り付けのボタンが無い")
+        let field = app.textViews["backupPasteField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10), "貼り付け欄が無い")
+        paste.tap()
+        // PasteButton はテストからのタップで効かないことがある。効かなければ長押しの「ペースト」から入れる
+        if (field.value as? String ?? "").count < 20 {
+            field.press(forDuration: 1.2)
+            let item = app.menuItems.matching(
+                NSPredicate(format: "label CONTAINS 'ペースト' OR label CONTAINS 'Paste'")).firstMatch
+            if item.waitForExistence(timeout: 5) { item.tap() }
+        }
+        XCTAssertTrue((field.value as? String ?? "").contains("Jansan"), "バックアップを貼り付けられない")
+
+        // 貼り付けた本文で欄が伸びて、ボタンが画面の外に出る
+        let preview = app.buttons["previewImport"]
+        XCTAssertTrue(scrollTo(app, preview), "「中身を確かめる」に届かない")
+        preview.tap()
+        // 取り込む内容は貼り付けた本文の下。画面の外にある間は要素にならないので、送ってから探す
+        let commit = app.buttons["commitImport"]
+        XCTAssertTrue(scrollTo(app, commit, tries: 12), "取り込みの内容が出ない")
+        attach(app, "バックアップから戻す")
+        commit.tap()
+        XCTAssertTrue(app.alerts["取り込みました"].waitForExistence(timeout: 15), "取り込めていない")
+        // フォルダを作り直したことを伝えていること
+        XCTAssertTrue(app.alerts.staticTexts.containing(
+            NSPredicate(format: "label CONTAINS 'フォルダ'")).firstMatch.exists,
+            "フォルダを戻したことが伝わっていない")
+        app.alerts.buttons["OK"].tap()
+
+        // バックアップと設定を閉じてからでないと、タブは切り替えられない
+        app.navigationBars["バックアップ"].buttons["閉じる"].tap()
+        app.navigationBars["設定"].buttons["完了"].tap()
+
+        // フォルダが戻り、その中に記録が1件ある
+        openRecordsTab(app)
+        let restored = directoryRow(app, name)
+        reveal(app, restored)
+        XCTAssertTrue(restored.waitForExistence(timeout: 10), "フォルダが戻っていない")
+        XCTAssertEqual(recordCount(restored.label), 1, "記録が元のフォルダに入っていない: \(restored.label)")
+        attach(app, "戻ったフォルダ")
     }
 
     /// 一覧の見出し「名前（9）」から件数を読む

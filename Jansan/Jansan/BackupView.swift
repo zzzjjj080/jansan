@@ -14,6 +14,8 @@ struct BackupView: View {
 
     @Query(filter: #Predicate<SavedGame> { !$0.isDraft }, sort: \SavedGame.savedAt, order: .reverse)
     private var records: [SavedGame]
+    @Query(sort: [SortDescriptor(\Directory.sortOrder), SortDescriptor(\Directory.createdAt)])
+    private var directories: [Directory]
 
     @State private var pasted = ""
     @State private var plan: ImportResult?
@@ -89,9 +91,15 @@ struct BackupView: View {
         let games = records.compactMap { record -> BackupGame? in
             guard let snapshot = try? record.snapshot() else { return nil }
             return BackupGame(uid: record.uid, playedAt: record.effectivePlayedAt,
-                              savedAt: record.savedAt, note: record.note, snapshot: snapshot)
+                              savedAt: record.savedAt, note: record.note, snapshot: snapshot,
+                              directoryId: record.directoryId ?? Directory.defaultUID)
         }
-        let data = try Backup.encode(BackupFile(games: games))
+        // 受け取っているフォルダは人のもの。自分で作ったフォルダだけ書き出す。
+        // **共有のIDとパスワードは入れない**（ファイルが人に渡ると共有を書き換えられる）
+        let folders = directories.filter { !$0.isSubscribed }.map {
+            BackupDirectory(uid: $0.uid, name: $0.name, sortOrder: $0.sortOrder)
+        }
+        let data = try Backup.encode(BackupFile(games: games, directories: folders))
         return String(decoding: data, as: UTF8.self)
     }
 
@@ -104,23 +112,40 @@ struct BackupView: View {
                 .font(.system(size: 12, design: .monospaced))
                 .accessibilityIdentifier("backupPasteField")
 
-            Button {
-                preview()
-            } label: {
-                Label("中身を確かめる", systemImage: "eye")
+            HStack {
+                // CSVの取り込みと同じ入口。長押しで貼るより早い
+                PasteButton(payloadType: String.self) { strings in
+                    Task { @MainActor in pasted = strings.joined(separator: "\n") }
+                }
+                .labelStyle(.titleAndIcon)
+                .buttonBorderShape(.capsule)
+                .accessibilityIdentifier("pasteBackup")
+
+                Spacer()
+
+                Button {
+                    preview()
+                } label: {
+                    Label("中身を確かめる", systemImage: "eye")
+                }
+                .buttonStyle(.borderless)
+                .disabled(pasted.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityIdentifier("previewImport")
             }
-            .disabled(pasted.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .accessibilityIdentifier("previewImport")
         } header: {
             Text("取り込み")
         } footer: {
-            Text("書き出したバックアップを貼り付けてください。**取り込む前に、何件入って何件飛ぶかをお見せします。** 同じ対局は二度入りません。")
+            Text("書き出したバックアップを貼り付けてください。**取り込む前に、何件入って何件飛ぶかをお見せします。** 同じ対局は二度入りません。フォルダ分けもそのまま戻ります（共有のIDとパスワードは書き出しに含めないので、共有はもう一度設定してください）。")
         }
     }
+
+    /// 貼り付けたバックアップに入っていたフォルダ。取り込むときに作り直す
+    @State private var pastedDirectories: [BackupDirectory] = []
 
     private func preview() {
         do {
             let file = try Backup.decode(pasted)
+            pastedDirectories = file.directories
             plan = Backup.plan(file: file,
                                existingUIDs: Set(records.map(\.uid)),
                                decimalMode: board.decimalMode)
@@ -181,18 +206,34 @@ struct BackupView: View {
     }
 
     private func commit(_ plan: ImportResult) {
+        // **フォルダ分けごと戻す。** 無いフォルダは名前も並び順もそのまま作り直す
+        var restoredFolders = 0
+        for folder in pastedDirectories where !directories.contains(where: { $0.uid == folder.uid }) {
+            DirectoryStore.ensure(uid: folder.uid, name: folder.name,
+                                  sortOrder: folder.sortOrder, in: context)
+            restoredFolders += 1
+        }
+        let known = Set(directories.map(\.uid)).union(pastedDirectories.map(\.uid))
+
         var inserted = 0
         for game in plan.added {
             guard let record = try? SavedGame(snapshot: game.snapshot, isDraft: false,
                                               savedAt: game.savedAt, playedAt: game.playedAt,
                                               note: game.note, uid: game.uid) else { continue }
+            // 元のフォルダが分からない古いバックアップは、これまでどおり「マイ記録」へ
+            if let id = game.directoryId, known.contains(id) || id == Directory.defaultUID {
+                record.directoryId = id
+            }
             context.insert(record)
             inserted += 1
         }
         try? context.save()
         self.plan = nil
         pasted = ""
-        done = "\(inserted) 件の記録を追加しました。"
+        pastedDirectories = []
+        done = restoredFolders > 0
+            ? "\(inserted) 件の記録を追加し、フォルダを \(restoredFolders) 個作り直しました。"
+            : "\(inserted) 件の記録を追加しました。"
     }
 
     private func presenting<T>(_ value: Binding<T?>) -> Binding<Bool> {

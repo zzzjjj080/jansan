@@ -13,13 +13,34 @@ public struct BackupGame: Codable, Equatable, Sendable {
     public var savedAt: Date
     public var note: String
     public var snapshot: GameSnapshot
+    /// どのフォルダの記録か。**戻すときに元のフォルダへ入れるために持つ。**
+    /// 古いバックアップには無いので任意。共有で送るときは入れない（受け取る側のフォルダに入る）
+    public var directoryId: UUID?
 
-    public init(uid: UUID, playedAt: Date, savedAt: Date, note: String, snapshot: GameSnapshot) {
+    public init(uid: UUID, playedAt: Date, savedAt: Date, note: String, snapshot: GameSnapshot,
+                directoryId: UUID? = nil) {
         self.uid = uid
         self.playedAt = playedAt
         self.savedAt = savedAt
         self.note = note
         self.snapshot = snapshot
+        self.directoryId = directoryId
+    }
+}
+
+/// バックアップに入れるフォルダ。**戻すときに作り直すための最小限**だけ持つ。
+///
+/// **共有のIDとパスワードは入れない。** バックアップのファイルは人に渡ることがあり、
+/// 鍵まで一緒に渡ると、その共有を他人に書き換えられてしまう
+public struct BackupDirectory: Codable, Equatable, Sendable {
+    public var uid: UUID
+    public var name: String
+    public var sortOrder: Int
+
+    public init(uid: UUID, name: String, sortOrder: Int) {
+        self.uid = uid
+        self.name = name
+        self.sortOrder = sortOrder
     }
 }
 
@@ -34,12 +55,26 @@ public struct BackupFile: Codable, Equatable, Sendable {
     public var app: String
     public var exportedAt: Date
     public var games: [BackupGame]
+    /// 書き出したときのフォルダ。古いバックアップには無いので、読めなければ空
+    public var directories: [BackupDirectory]
 
-    public init(games: [BackupGame], exportedAt: Date = .now) {
+    public init(games: [BackupGame], directories: [BackupDirectory] = [], exportedAt: Date = .now) {
         self.formatVersion = Self.currentFormatVersion
         self.app = "Jansan"
         self.exportedAt = exportedAt
         self.games = games
+        self.directories = directories
+    }
+
+    /// **古い版で書き出したファイルには `directories` が無い。**
+    /// Swift が作る読み取りは、項目が無いだけで失敗する（既定値は使われない）ので自分で書く
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        formatVersion = try c.decode(Int.self, forKey: .formatVersion)
+        app = try c.decode(String.self, forKey: .app)
+        exportedAt = try c.decode(Date.self, forKey: .exportedAt)
+        games = try c.decode([BackupGame].self, forKey: .games)
+        directories = try c.decodeIfPresent([BackupDirectory].self, forKey: .directories) ?? []
     }
 }
 

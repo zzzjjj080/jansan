@@ -104,9 +104,15 @@ final class NewFeaturesUITests: XCTestCase {
     /// 記録タブを開いて「マイ記録」に入る
     private func openMyRecords(_ app: XCUIApplication) {
         XCTAssertTrue(app.buttons["openSettings"].waitForExistence(timeout: 20), "入力画面が出ない")
-        app.segmentedControls.firstMatch.buttons["記録"].tap()
         // 中に入るのは「詳細」ボタンからだけ
+        let tab = app.segmentedControls.firstMatch.buttons["記録"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 10), "「記録」の切り替えが無い")
         let detail = app.buttons["「マイ記録」の記録を開く"]
+        // 起動直後の切り替えのタップは飲まれることがある。出なければ押し直す
+        for _ in 0..<3 where !detail.exists {
+            tab.tap()
+            _ = detail.waitForExistence(timeout: 6)
+        }
         XCTAssertTrue(detail.waitForExistence(timeout: 10), "「マイ記録」の詳細ボタンが無い")
         detail.tap()
         XCTAssertTrue(app.navigationBars["マイ記録"].waitForExistence(timeout: 10), "マイ記録が開かない")

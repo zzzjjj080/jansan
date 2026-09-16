@@ -150,3 +150,37 @@ private extension JSONEncoder {
         return e
     }
 }
+
+@Suite("バックアップとフォルダ分け")
+struct BackupDirectoryTests {
+
+    private let folder = UUID()
+
+    @Test("フォルダと、記録がどのフォルダのものかが、書き出して読み直しても残る")
+    func keepsDirectories() throws {
+        let game = BackupGame(uid: UUID(), playedAt: Date(timeIntervalSince1970: 1_700_000_000),
+                              savedAt: Date(timeIntervalSince1970: 1_700_000_100), note: "",
+                              snapshot: snapshot(), directoryId: folder)
+        let file = BackupFile(games: [game],
+                              directories: [BackupDirectory(uid: folder, name: "田中宅", sortOrder: 3)])
+        let back = try Backup.decode(try Backup.encode(file))
+        #expect(back.directories == [BackupDirectory(uid: folder, name: "田中宅", sortOrder: 3)])
+        #expect(back.games.first?.directoryId == folder)
+    }
+
+    @Test("フォルダの情報が無い古いバックアップも、これまでどおり読める")
+    func oldBackupWithoutDirectories() throws {
+        let old = """
+        {"app":"Jansan","exportedAt":"2026-09-01T00:00:00Z","formatVersion":1,"games":[]}
+        """
+        let file = try Backup.decode(old)
+        #expect(file.directories.isEmpty)
+        #expect(file.games.isEmpty)
+    }
+
+    @Test("共有で送る塊には、フォルダの割り当てを入れない")
+    func sharedDocumentHasNoDirectory() throws {
+        let game = BackupGame(uid: UUID(), playedAt: .now, savedAt: .now, note: "", snapshot: snapshot())
+        #expect(game.directoryId == nil)
+    }
+}
