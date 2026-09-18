@@ -234,48 +234,13 @@ struct CSVImportView: View {
     }
 
     private func commit() {
-        var inserted = 0
-        let now = Date.now
-        for game in newGames {
-            // 一覧は保存日時の新しい順。貼った順に上から並ぶよう、1秒ずつ前にずらす
-            guard let record = try? SavedGame(snapshot: game.snapshot, isDraft: false,
-                                              savedAt: now.addingTimeInterval(-Double(inserted)),
-                                              playedAt: PlayedDate.unknown) else { continue }
-            record.directoryId = directory.uid
-            context.insert(record)
-            inserted += 1
-        }
-        if inserted > 0, directory.isShared {
-            directory.needsPublish = true
-            directory.updatedAt = .now
-        }
-        try? context.save()
-        addedCount = inserted
+        addedCount = ImportCommit.insert(newGames, into: directory, in: context)
         commits += 1
         pasted = ""
         done = true
     }
 
     private func message(for error: CSVImportError) -> String {
-        switch error {
-        case .empty:
-            "何も貼られていません。"
-        case .looksLikeBackup:
-            "これはバックアップです。設定の「バックアップ」から取り込んでください。"
-        case .scoresBeforeNames(let line):
-            "\(line)行目：名前の行より先に点数があります。点数の上に「No,名前,名前,…」の行を入れてください。"
-        case .playerCount(let line, let count):
-            "\(line)行目：名前が\(count)人ぶんです。3〜\(Roster.maxActive)人の表にしてください。"
-        case .emptyName(let line):
-            "\(line)行目：名前が空の列があります。"
-        case .duplicateName(let line, let name):
-            "\(line)行目：「\(name)」が2列あります。集計で混ざるので、名前を分けてください。"
-        case .notANumber(let line, let cell):
-            "\(line)行目：「\(cell)」を点数として読めません。"
-        case .tooManyScores(let line):
-            "\(line)行目：名前の数より点数が多くなっています。"
-        case .noRounds(let line):
-            "\(line)行目の名前の下に、点数の行がありません。"
-        }
+        CSVImportMessage.text(for: error)
     }
 }

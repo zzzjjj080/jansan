@@ -118,6 +118,27 @@ final class NewFeaturesUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["マイ記録"].waitForExistence(timeout: 10), "マイ記録が開かない")
     }
 
+    /// **写真から取り込む入口が、記録タブの＋の隣にある**こと。
+    /// 写真の選択そのものはシステムの画面なので、ここでは入口と中身の並びまでを見る
+    func testPhotoImportEntryFromRecordsTab() {
+        let app = launchApp()
+        XCTAssertTrue(app.buttons["openSettings"].waitForExistence(timeout: 20), "入力画面が出ない")
+        app.segmentedControls.firstMatch.buttons["記録"].tap()
+
+        let entry = app.buttons["importFromPhoto"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 10), "写真から取り込む入口が無い")
+        entry.tap()
+
+        XCTAssertTrue(app.navigationBars["写真から取り込む"].waitForExistence(timeout: 10), "写真の取り込みが開かない")
+        XCTAssertTrue(app.buttons["pickPhoto"].waitForExistence(timeout: 5), "写真を選ぶボタンが無い")
+        XCTAssertTrue(app.buttons["photoImportDirectory"].exists || app.staticTexts["入れる先"].exists,
+                      "入れる先を選べない")
+        XCTAssertTrue(app.buttons["copyAIPromptFromPhoto"].exists, "AIへのお願い文が無い")
+        attach(app, "写真から取り込む")
+        app.buttons["やめる"].tap()
+        XCTAssertTrue(app.buttons["addDirectory"].waitForExistence(timeout: 10), "閉じられない")
+    }
+
     // MARK: - 記録の検索・編集
 
     func testSearchAndEditRecord() {

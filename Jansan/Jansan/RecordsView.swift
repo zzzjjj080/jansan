@@ -29,11 +29,13 @@ struct RecordsView: View {
     private enum RecordsSheet: Identifiable {
         case subscribe
         case stats(UUID)
+        case photo
 
         var id: String {
             switch self {
             case .subscribe: "subscribe"
             case .stats(let uid): "stats-\(uid.uuidString)"
+            case .photo: "photo"
             }
         }
     }
@@ -104,6 +106,16 @@ struct RecordsView: View {
                 }
             }
             .toolbar {
+                // 写真から取り込む入口。**＋ の隣に置くだけ**にして、普段の邪魔をしない
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        sheet = .photo
+                    } label: {
+                        Image(systemName: "text.viewfinder")
+                    }
+                    .accessibilityLabel("写真から取り込む")
+                    .accessibilityIdentifier("importFromPhoto")
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button {
@@ -154,6 +166,8 @@ struct RecordsView: View {
                     if let dir = directories.first(where: { $0.uid == uid }) {
                         AllStatsView(directory: dir)
                     }
+                case .photo:
+                    PhotoImportView()
                 }
             }
             // 一覧を開いたら、受け取っているものを静かに取り直す。
