@@ -1,15 +1,12 @@
 import SwiftUI
 import SwiftData
-import PhotosUI
 import JansanCore
 
-/// スクリーンショットや紙のスコア表から、記録を取り込む。
+/// 写真やスクリーンショットの点数を、AI に表へ直してもらって取り込む。
 ///
-/// **道は2つだけ**（端末の中だけで読む方式は、実用にならなかったので外した。本人の指示）。
-/// 1. 設定でAPIキーを入れておき、この画面から「AIに読ませる」
-/// 2. お願い文をコピーして、自分で ChatGPT や Claude に写真ごと渡し、返ってきた表を貼る
-///
-/// どちらでも、**取り込む前に文字で見せて直せる**ようにしてある
+/// **アプリ自身は写真を読まない**（端末の中で読む方式も、APIキーで送る方式も、使いものにならなかったので外した）。
+/// やることは「お願い文をコピーして、自分のAIアプリに写真と一緒に渡し、返ってきた表を貼る」だけ。
+/// そのぶん、**手順を画面に書いて、押す所を大きくする**
 struct PhotoImportView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
@@ -18,12 +15,7 @@ struct PhotoImportView: View {
     private var directories: [Directory]
     @AppStorage("currentDirectory") private var currentDirectoryID = Directory.defaultUID.uuidString
 
-    @State private var settings = AISettings.shared
     @State private var target: UUID?
-    @State private var photo: PhotosPickerItem?
-    @State private var image: UIImage?
-    @State private var showCamera = false
-    @State private var askingAI = false
     @State private var text = ""
     @State private var games: [CSVImportedGame] = []
     @State private var duplicate: [Bool] = []
@@ -31,7 +23,7 @@ struct PhotoImportView: View {
     @State private var addedCount = 0
     @State private var done = false
     @State private var didCopyPrompt = false
-    @State private var reads = 0
+    @State private var copies = 0
     @State private var commits = 0
 
     /// 入れられるのは自分のフォルダだけ。受け取ったものは書き換えられない
@@ -52,10 +44,9 @@ struct PhotoImportView: View {
     var body: some View {
         NavigationStack {
             Form {
-                photoSection
-                if settings.hasKey { aiReadSection } else { noKeySection }
-                promptSection
-                textSection
+                howToSection
+                copySection
+                pasteSection
                 if !games.isEmpty { planSection }
             }
             .navigationTitle("写真から取り込む")
@@ -65,7 +56,7 @@ struct PhotoImportView: View {
                     Button("やめる") { dismiss() }
                 }
             }
-            .sensoryFeedback(.selection, trigger: reads)
+            .sensoryFeedback(.success, trigger: copies)
             .sensoryFeedback(.success, trigger: commits)
             .alert("取り込めませんでした", isPresented: Binding(get: { failure != nil },
                                                           set: { if !$0 { failure = nil } })) {
@@ -78,20 +69,75 @@ struct PhotoImportView: View {
             } message: {
                 Text("\(addedCount) 件を「\(directory?.name ?? "")」に追加しました。日付は未記入です。")
             }
-            .onChange(of: photo) { _, item in
-                guard let item else { return }
-                Task { await load(item) }
-            }
-            .fullScreenCover(isPresented: $showCamera) {
-                CameraPicker { picked in image = picked }
-                    .ignoresSafeArea()
-            }
         }
     }
 
-    // MARK: - 写真を選ぶ
+    // MARK: - やり方
 
-    private var photoSection: some View {
+    private var howToSection: some View {
+        Section {
+            step(1, "スコア表を写真に撮る", "紙でも、他のアプリの画面のスクショでも構いません")
+            step(2, "下の「お願い文をコピー」を押す", "AIに渡す文章がコピーされます")
+            step(3, "ChatGPT や Claude のアプリを開く", "写真を貼り、コピーした文も貼って送ります")
+            step(4, "返ってきた表をコピーする", "「中村,五十嵐,…」で始まる表です")
+            step(5, "ここに戻って貼り、取り込む", "貼ったあと「中身を確かめる」→「取り込む」")
+        } header: {
+            Text("やり方")
+        } footer: {
+            Text("アプリ自身は写真を読みません。読み取りはお使いのAIアプリに任せ、その結果を取り込みます。")
+        }
+    }
+
+    private func step(_ number: Int, _ title: String, _ detail: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(number)")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(Palette.accentInk)
+                .frame(width: 26, height: 26)
+                .background(Palette.accent, in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Palette.ink)
+                Text(detail)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Palette.inkDim)
+            }
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - ① コピー
+
+    private var copySection: some View {
+        Section {
+            Button {
+                UIPasteboard.general.string = CSVImport.aiPrompt
+                didCopyPrompt = true
+                copies += 1
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    didCopyPrompt = false
+                }
+            } label: {
+                bigLabel(didCopyPrompt ? "コピーしました" : "AIへのお願い文をコピー",
+                         systemImage: didCopyPrompt ? "checkmark.circle.fill" : "doc.on.doc",
+                         filled: true)
+            }
+            .buttonStyle(.borderless)
+            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+            .accessibilityIdentifier("copyAIPromptFromPhoto")
+        } header: {
+            Text("① AIに渡す")
+        } footer: {
+            Text("写真と一緒に渡すと、この形の表にしてくれます。")
+        }
+    }
+
+    // MARK: - ② 貼って取り込む
+
+    private var pasteSection: some View {
         Section {
             Picker("入れる先", selection: Binding(get: { directory?.uid ?? Directory.defaultUID },
                                                set: { target = $0 })) {
@@ -101,100 +147,6 @@ struct PhotoImportView: View {
             }
             .accessibilityIdentifier("photoImportDirectory")
 
-            // その場で撮る。**撮った写真は写真アプリにも残す**ので、あとから見返せる
-            if CameraPicker.isAvailable {
-                Button {
-                    showCamera = true
-                } label: {
-                    Label("カメラで撮る", systemImage: "camera")
-                }
-                .accessibilityIdentifier("takePhoto")
-            }
-
-            PhotosPicker(selection: $photo, matching: .images, photoLibrary: .shared()) {
-                Label(image == nil ? "写真やスクショを選ぶ" : "別の写真にする", systemImage: "photo.on.rectangle")
-            }
-            .accessibilityIdentifier("pickPhoto")
-
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxHeight: 180)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .accessibilityHidden(true)
-            }
-        } header: {
-            Text("紙のスコア表・他のアプリの画面")
-        } footer: {
-            Text("カメラで撮った写真は、写真アプリにも残ります。")
-        }
-    }
-
-    // MARK: - AIに読ませる（鍵がある人）
-
-    private var aiReadSection: some View {
-        Section {
-            Button {
-                askAI()
-            } label: {
-                HStack {
-                    Label(askingAI ? "読んでいます…" : "AIに読ませる", systemImage: "wand.and.stars")
-                    if askingAI {
-                        Spacer()
-                        ProgressView()
-                    }
-                }
-            }
-            .disabled(image == nil || askingAI)
-            .accessibilityIdentifier("askAI")
-        } header: {
-            Text("AIで読み取る")
-        } footer: {
-            Text("選んだ写真を\(settings.provider.name)へ送り、点数の表にしてもらいます。送るのはこのボタンを押したときだけです。料金はご自身の契約にかかります。")
-        }
-    }
-
-    /// 鍵が無い人への案内。**押せないボタンを並べない**で、やることだけ書く
-    private var noKeySection: some View {
-        Section {
-            Label("設定の「AIで読み取る」でAPIキーを入れると、この画面から直接読み取れます",
-                  systemImage: "key")
-                .font(.footnote)
-                .foregroundStyle(Palette.inkDim)
-                .accessibilityIdentifier("aiKeyHint")
-        } header: {
-            Text("AIで読み取る")
-        }
-    }
-
-    // MARK: - 自分でAIに渡す
-
-    private var promptSection: some View {
-        Section {
-            Button {
-                UIPasteboard.general.string = CSVImport.aiPrompt
-                didCopyPrompt = true
-                Task {
-                    try? await Task.sleep(for: .seconds(1.8))
-                    didCopyPrompt = false
-                }
-            } label: {
-                Label(didCopyPrompt ? "コピーしました" : "AIへのお願い文をコピー",
-                      systemImage: didCopyPrompt ? "checkmark.circle.fill" : "doc.on.doc")
-            }
-            .accessibilityIdentifier("copyAIPromptFromPhoto")
-        } header: {
-            Text("自分でAIに渡す")
-        } footer: {
-            Text("APIキーを使わない方法です。ChatGPT や Claude のアプリに写真とこのお願い文を渡し、返ってきた表を下の欄に貼ってください。")
-        }
-    }
-
-    // MARK: - 取り込む表
-
-    private var textSection: some View {
-        Section {
             TextEditor(text: $text)
                 .frame(minHeight: 130)
                 .font(.system(size: 12, design: .monospaced))
@@ -206,28 +158,25 @@ struct PhotoImportView: View {
                     duplicate = []
                 }
 
-            HStack {
-                PasteButton(payloadType: String.self) { strings in
-                    Task { @MainActor in text = strings.joined(separator: "\n") }
-                }
-                .labelStyle(.titleAndIcon)
-                .buttonBorderShape(.capsule)
+            PasteButton(payloadType: String.self) { strings in
+                Task { @MainActor in text = strings.joined(separator: "\n") }
+            }
+            .labelStyle(.titleAndIcon)
+            .buttonBorderShape(.capsule)
 
-                Spacer()
-
-                Button {
-                    preview()
-                } label: {
-                    Label("中身を確かめる", systemImage: "eye")
-                }
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .accessibilityIdentifier("previewPhoto")
+            Button {
+                preview()
+            } label: {
+                bigLabel("中身を確かめる", systemImage: "eye", filled: false)
             }
             .buttonStyle(.borderless)
+            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+            .accessibilityIdentifier("previewPhoto")
         } header: {
-            Text("取り込む表")
+            Text("② 返ってきた表を貼る")
         } footer: {
-            Text("1行目が名前、そのあとが1局ずつの点数です。読み違いはここで直せます。お休みの人は空欄にします。")
+            Text("1行目が名前、そのあとが1局ずつの点数です。ずれていたら直せます。お休みの人は空欄にします。")
         }
     }
 
@@ -254,43 +203,31 @@ struct PhotoImportView: View {
             Button {
                 commit()
             } label: {
-                Label("\(newGames.count) 件を取り込む", systemImage: "square.and.arrow.down")
+                bigLabel("\(newGames.count) 件を取り込む", systemImage: "square.and.arrow.down", filled: true)
             }
             .buttonStyle(.borderless)
             .disabled(newGames.isEmpty)
+            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
             .accessibilityIdentifier("commitPhoto")
         } header: {
-            Text("取り込む内容")
+            Text("③ 取り込む内容")
         }
+    }
+
+    /// 押す所は大きく。指で押しやすい高さにして、何をする所かを言葉で出す
+    private func bigLabel(_ title: String, systemImage: String, filled: Bool) -> some View {
+        Label(title, systemImage: systemImage)
+            .labelStyle(.titleAndIcon)
+            .font(.system(size: 16, weight: .bold))
+            .foregroundStyle(filled ? Palette.accentInk : Palette.accent)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(filled ? Palette.accent : Palette.accent.opacity(0.12),
+                        in: RoundedRectangle(cornerRadius: 12))
+            .contentShape(Rectangle())
     }
 
     // MARK: - 処理
-
-    private func load(_ item: PhotosPickerItem) async {
-        guard let data = try? await item.loadTransferable(type: Data.self),
-              let picked = UIImage(data: data) else {
-            failure = "写真を読み込めませんでした。"
-            return
-        }
-        image = picked
-    }
-
-    /// 写真を AI に送って表にしてもらう。**押したときだけ送る**
-    private func askAI() {
-        guard let image, let reader = settings.reader else { return }
-        askingAI = true
-        Task {
-            do {
-                text = try await reader.readCSV(from: image)
-                games = []
-                duplicate = []
-                reads += 1
-            } catch {
-                failure = error.localizedDescription
-            }
-            askingAI = false
-        }
-    }
 
     private func preview() {
         guard let directory else { return }
@@ -317,8 +254,6 @@ struct PhotoImportView: View {
         games = []
         duplicate = []
         text = ""
-        image = nil
-        photo = nil
         done = true
     }
 

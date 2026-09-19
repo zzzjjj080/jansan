@@ -409,7 +409,6 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "雀算";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "紙のスコア表を撮って、点数を取り込むために使います。撮った写真はこの端末の中だけで読み取り、どこにも送りません。";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "作った成績の画像を写真に保存するために使います。写真を読み取ることはありません。";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -458,7 +457,6 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "雀算";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "紙のスコア表を撮って、点数を取り込むために使います。撮った写真はこの端末の中だけで読み取り、どこにも送りません。";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "作った成績の画像を写真に保存するために使います。写真を読み取ることはありません。";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;

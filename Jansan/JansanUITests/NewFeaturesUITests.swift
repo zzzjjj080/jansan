@@ -119,7 +119,8 @@ final class NewFeaturesUITests: XCTestCase {
     }
 
     /// **写真から取り込む入口が、記録タブの＋の隣にある**こと。
-    /// 写真の選択そのものはシステムの画面なので、ここでは入口と中身の並びまでを見る
+    /// 中身は「手順」「お願い文のコピー」「貼って取り込む」の3つで、
+    /// **アプリ自身は写真を読まない**（読み取りの仕組みは持たない）
     func testPhotoImportEntryFromRecordsTab() {
         let app = launchApp()
         XCTAssertTrue(app.buttons["openSettings"].waitForExistence(timeout: 20), "入力画面が出ない")
@@ -130,34 +131,22 @@ final class NewFeaturesUITests: XCTestCase {
         entry.tap()
 
         XCTAssertTrue(app.navigationBars["写真から取り込む"].waitForExistence(timeout: 10), "写真の取り込みが開かない")
-        XCTAssertTrue(app.buttons["pickPhoto"].waitForExistence(timeout: 5), "写真を選ぶボタンが無い")
-        XCTAssertTrue(app.buttons["photoImportDirectory"].exists || app.staticTexts["入れる先"].exists,
-                      "入れる先を選べない")
-        XCTAssertTrue(app.buttons["copyAIPromptFromPhoto"].exists, "AIへのお願い文が無い")
+        // 手順が書いてあること
+        XCTAssertTrue(app.staticTexts.containing(
+            NSPredicate(format: "label CONTAINS 'お願い文をコピー'")).firstMatch.exists, "手順が書かれていない")
+        XCTAssertTrue(app.buttons["copyAIPromptFromPhoto"].exists, "お願い文のコピーが無い")
+        XCTAssertTrue(app.textViews["photoReadField"].exists, "貼り付け欄が無い")
+        // 読み取りの仕組みは持たない
+        XCTAssertFalse(app.buttons["askAI"].exists, "AIに読ませるが残っている")
+        XCTAssertFalse(app.buttons["pickPhoto"].exists, "写真を選ぶが残っている")
+        XCTAssertFalse(app.buttons["takePhoto"].exists, "カメラが残っている")
         attach(app, "写真から取り込む")
+
+        app.buttons["copyAIPromptFromPhoto"].tap()
+        XCTAssertTrue(app.staticTexts["コピーしました"].waitForExistence(timeout: 5), "コピーの手応えが無い")
+
         app.buttons["やめる"].tap()
         XCTAssertTrue(app.buttons["addDirectory"].waitForExistence(timeout: 10), "閉じられない")
-    }
-
-    /// **AIのキーを入れていない状態では、写真の画面に「AIに読ませる」は出ない**こと。
-    /// 設定に登録の欄があることもあわせて見る
-    func testAIKeySettingsAndPhotoScreen() {
-        let app = launchApp()
-        openSettings(app)
-        // 鍵の欄を目印にする（画面の下のほうにある）
-        let field = app.secureTextFields["aiKeyField"]
-        XCTAssertTrue(scrollTo(app, field), "APIキーの欄が無い")
-        XCTAssertTrue(app.descendants(matching: .any)["aiProvider"].exists, "使うAIを選べない")
-        XCTAssertFalse(app.buttons["deleteAIKey"].exists, "鍵を入れていないのに削除が出ている")
-        attach(app, "AIの設定")
-        app.navigationBars["設定"].buttons["完了"].tap()
-
-        app.segmentedControls.firstMatch.buttons["記録"].tap()
-        app.buttons["importFromPhoto"].tap()
-        XCTAssertTrue(app.navigationBars["写真から取り込む"].waitForExistence(timeout: 10))
-        XCTAssertFalse(app.buttons["askAI"].exists, "鍵が無いのに「AIに読ませる」が出ている")
-        XCTAssertTrue(app.buttons["copyAIPromptFromPhoto"].exists, "お願い文のコピーが無い")
-        app.buttons["やめる"].tap()
     }
 
     // MARK: - 記録の検索・編集
