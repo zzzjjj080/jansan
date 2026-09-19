@@ -251,3 +251,37 @@ struct CSVImportDuplicateAndDateTests {
         #expect(StatsPeriod.last30Days.contains(PlayedDate.unknown, now: now) == false)
     }
 }
+
+@Suite("AIや写真から来た表の崩れを吸収する")
+struct SheetReaderRobustnessTests {
+
+    @Test("題名の行と、崩れた合計の行があっても取り込める")
+    func titleAndGarbledTotal() throws {
+        // 実際に読み取ったもの（他のアプリの画面）。合計が「合卵9」に化けた
+        let csv = """
+        対局結果
+        中村,五十嵐,斎藤,佐々木
+        30,10,-10,-30
+        -20,40,0,-20
+        合卵9,45,-1,-103
+        """
+        let games = try CSVImport.parse(csv)
+        #expect(games.count == 1)
+        #expect(games[0].session.players == ["中村", "五十嵐", "斎藤", "佐々木"])
+        #expect(games[0].session.playedRoundCount == 2)
+        #expect(games[0].session.playerStats().map(\.total) == [10, 50, -10, -50])
+    }
+
+    @Test("「合」で始まる名前の行は、合計と間違えない")
+    func nameStartingWithTotalCharacter() throws {
+        let csv = """
+        中村,五十嵐,斎藤,佐々木
+        30,10,-10,-30
+        合田,田中,佐藤,鈴木
+        20,-10,-5,-5
+        """
+        let games = try CSVImport.parse(csv)
+        #expect(games.count == 2)
+        #expect(games[1].session.players == ["合田", "田中", "佐藤", "鈴木"])
+    }
+}
