@@ -96,6 +96,11 @@ public enum CSVImport {
                 pending?.totalCells = Array(cells.dropFirst())
                 continue
             }
+            // 写真からの読み取りでは「合計」が「合卵9」のように化け、隣の数字とくっつくことがある。
+            // 点数の行がすでにあり、残りが全部数字なら合計の行とみなして飛ばす（合計は数え直せる）
+            if isGarbledTotalRow(cells, hasRows: pending?.rows.isEmpty == false) {
+                continue
+            }
 
             if cells.contains(where: { number($0) != nil }) {
                 guard pending != nil else { throw CSVImportError.scoresBeforeNames(line: line) }
@@ -166,6 +171,18 @@ public enum CSVImport {
 
     static func isTotalLabel(_ cell: String) -> Bool {
         ["合計", "計", "total"].contains(cell.lowercased())
+    }
+
+    /// 読み取りで崩れた合計の行か。**名前の行を巻き添えにしない**ように、
+    /// 「点数の行がすでにある」「残りが全部数字」の両方がそろったときだけ合計とみなす
+    static func isGarbledTotalRow(_ cells: [String], hasRows: Bool) -> Bool {
+        guard hasRows, let first = cells.first, number(first) == nil else { return false }
+        let lower = first.lowercased()
+        let looksLikeTotal = first.hasPrefix("合") || first.hasPrefix("計")
+            || lower.hasPrefix("total") || lower.hasPrefix("sum")
+        guard looksLikeTotal else { return false }
+        let rest = cells.dropFirst().filter { !$0.isEmpty }
+        return !rest.isEmpty && rest.allSatisfy { number($0) != nil }
     }
 
     /// タブがあればタブで、無ければカンマで区切る。表計算ソフトからのコピーはタブになる

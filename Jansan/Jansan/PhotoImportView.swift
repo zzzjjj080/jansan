@@ -27,6 +27,9 @@ struct PhotoImportView: View {
     @State private var addedCount = 0
     @State private var done = false
     @State private var didCopyPrompt = false
+    @State private var showCamera = false
+    @State private var settings = AISettings.shared
+    @State private var askingAI = false
     @State private var reads = 0
     @State private var commits = 0
 
@@ -75,6 +78,12 @@ struct PhotoImportView: View {
                 guard let item else { return }
                 Task { await load(item) }
             }
+            .fullScreenCover(isPresented: $showCamera) {
+                CameraPicker { picked in
+                    Task { await read(picked) }
+                }
+                .ignoresSafeArea()
+            }
         }
     }
 
@@ -90,8 +99,18 @@ struct PhotoImportView: View {
             }
             .accessibilityIdentifier("photoImportDirectory")
 
+            // その場で撮る。**撮った写真は写真アプリにも残す**ので、あとから見返せる
+            if CameraPicker.isAvailable {
+                Button {
+                    showCamera = true
+                } label: {
+                    Label("カメラで撮る", systemImage: "camera")
+                }
+                .accessibilityIdentifier("takePhoto")
+            }
+
             PhotosPicker(selection: $photo, matching: .images, photoLibrary: .shared()) {
-                Label(image == nil ? "写真を選ぶ" : "別の写真にする", systemImage: "photo.on.rectangle")
+                Label(image == nil ? "写真やスクショを選ぶ" : "別の写真にする", systemImage: "photo.on.rectangle")
             }
             .accessibilityIdentifier("pickPhoto")
 
@@ -113,7 +132,7 @@ struct PhotoImportView: View {
         } header: {
             Text("スクリーンショットや紙の写真")
         } footer: {
-            Text("・読み取りはこの端末の中だけで行います。写真はどこにも送りません\n・名前の行と、点数の並びが写っているものを選んでください\n・読み違いは下の欄で直せます")
+            Text("・読み取りはこの端末の中だけで行います。写真はどこにも送りません\n・カメラで撮った写真は、写真アプリにも残ります\n・名前の行と、点数の並びが写っているものを選んでください\n・読み違いは下の欄で直せます")
         }
     }
 
@@ -184,6 +203,22 @@ struct PhotoImportView: View {
 
     private var aiSection: some View {
         Section {
+            if settings.hasKey {
+                Button {
+                    askAI()
+                } label: {
+                    HStack {
+                        Label("AIに読ませる", systemImage: "wand.and.stars")
+                        if askingAI {
+                            Spacer()
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(image == nil || askingAI)
+                .accessibilityIdentifier("askAI")
+            }
+
             Button {
                 UIPasteboard.general.string = CSVImport.aiPrompt
                 didCopyPrompt = true
@@ -199,7 +234,9 @@ struct PhotoImportView: View {
         } header: {
             Text("うまく読めないとき")
         } footer: {
-            Text("手書きや斜めの写真は読み違えます。そのときは ChatGPT や Claude に写真とこのお願い文を渡し、返ってきた内容を上の欄に貼ってください。")
+            Text(settings.hasKey
+                 ? "手書きや斜めの写真は端末の中の読み取りでは崩れます。「AIに読ませる」を押すと、この写真を\(settings.provider.name)へ送って読み直します（料金はご自身の契約にかかります）。返ってきた内容は上の欄で直せます。"
+                 : "手書きや斜めの写真は読み違えます。設定の「AIで読み取る」にAPIキーを入れると、この画面から直接AIに読ませられます。入れない場合は、このお願い文と写真を ChatGPT や Claude に渡し、返ってきた内容を上の欄に貼ってください。")
         }
     }
 
@@ -213,6 +250,13 @@ struct PhotoImportView: View {
             failure = "写真を読み込めませんでした。"
             return
         }
+        await read(picked)
+    }
+
+    /// 選んだ写真・撮った写真を読む。**どちらも同じ道を通す**
+    private func read(_ picked: UIImage) async {
+        reading = true
+        defer { reading = false }
         image = picked
         games = []
         duplicate = []
@@ -225,6 +269,24 @@ struct PhotoImportView: View {
             return
         }
         text = csv
+    }
+
+    /// 写真を AI に送って読み直す。**押したときだけ送る**
+    private func askAI() {
+        guard let image, let reader = settings.reader else { return }
+        askingAI = true
+        Task {
+            do {
+                let csv = try await reader.readCSV(from: image)
+                text = csv
+                games = []
+                duplicate = []
+                reads += 1
+            } catch {
+                failure = error.localizedDescription
+            }
+            askingAI = false
+        }
     }
 
     private func preview() {

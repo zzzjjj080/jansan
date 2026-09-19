@@ -139,6 +139,27 @@ final class NewFeaturesUITests: XCTestCase {
         XCTAssertTrue(app.buttons["addDirectory"].waitForExistence(timeout: 10), "閉じられない")
     }
 
+    /// **AIのキーを入れていない状態では、写真の画面に「AIに読ませる」は出ない**こと。
+    /// 設定に登録の欄があることもあわせて見る
+    func testAIKeySettingsAndPhotoScreen() {
+        let app = launchApp()
+        openSettings(app)
+        // 鍵の欄を目印にする（画面の下のほうにある）
+        let field = app.secureTextFields["aiKeyField"]
+        XCTAssertTrue(scrollTo(app, field), "APIキーの欄が無い")
+        XCTAssertTrue(app.descendants(matching: .any)["aiProvider"].exists, "使うAIを選べない")
+        XCTAssertFalse(app.buttons["deleteAIKey"].exists, "鍵を入れていないのに削除が出ている")
+        attach(app, "AIの設定")
+        app.navigationBars["設定"].buttons["完了"].tap()
+
+        app.segmentedControls.firstMatch.buttons["記録"].tap()
+        app.buttons["importFromPhoto"].tap()
+        XCTAssertTrue(app.navigationBars["写真から取り込む"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["askAI"].exists, "鍵が無いのに「AIに読ませる」が出ている")
+        XCTAssertTrue(app.buttons["copyAIPromptFromPhoto"].exists, "お願い文のコピーが無い")
+        app.buttons["やめる"].tap()
+    }
+
     // MARK: - 記録の検索・編集
 
     func testSearchAndEditRecord() {
