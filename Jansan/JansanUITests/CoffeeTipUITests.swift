@@ -137,6 +137,8 @@ final class CoffeeTipUITests: XCTestCase {
 
         let send = app.buttons["sendFeedback"]
         XCTAssertTrue(send.waitForExistence(timeout: 15), "報告ボタンが無い")
+        // 設定の下には投げ銭・データ・版の印が続く。いちばん下まで送ると、報告ボタンは画面の上に外れる
+        for _ in 0..<6 where !send.isHittable { app.swipeDown() }
         XCTAssertTrue(send.isHittable, "報告ボタンが押せる状態にない")
         XCTAssertTrue(
             app.staticTexts.containing(
