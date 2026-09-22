@@ -64,6 +64,9 @@ struct JansanApp: App {
         }
     }()
 
+    /// 共有の更新の知らせを、アプリを開いているときにも出すため
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     var body: some Scene {
         WindowGroup {
             RootView()

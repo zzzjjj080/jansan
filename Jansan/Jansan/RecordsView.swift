@@ -179,6 +179,10 @@ struct RecordsView: View {
             .refreshable {
                 await SharePublisher.refreshSubscriptions(in: context)
             }
+            // 更新の知らせが届いたら、その場で取り直す
+            .onReceive(NotificationCenter.default.publisher(for: ShareNotifier.didReceive)) { _ in
+                Task { await SharePublisher.refreshSubscriptions(in: context) }
+            }
         }
     }
 
@@ -331,6 +335,7 @@ struct RecordsView: View {
         if dir.isSubscribed {
             let id = dir.shareID, pw = dir.sharePassword
             Task { await ShareClient.removeReceipt(id: id, password: pw) }
+            Task { await ShareNotifier.disable(id: id, password: pw) }
         }
         for game in DirectoryStore.games(of: dir, in: context) { context.delete(game) }
         if dir.uid.uuidString == currentDirectoryID {

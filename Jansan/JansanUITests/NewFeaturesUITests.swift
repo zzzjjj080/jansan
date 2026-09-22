@@ -149,6 +149,16 @@ final class NewFeaturesUITests: XCTestCase {
         XCTAssertTrue(app.buttons["addDirectory"].waitForExistence(timeout: 10), "閉じられない")
     }
 
+    /// 設定に「共有の更新を知らせる」があり、既定でオンになっていること
+    func testShareNotifyToggleInSettings() {
+        let app = launchApp()
+        openSettings(app)
+        let toggle = app.switches["notifyShareUpdates"]
+        XCTAssertTrue(scrollTo(app, toggle), "共有の更新を知らせる設定が無い")
+        XCTAssertEqual(toggle.value as? String, "1", "既定でオンになっていない")
+        attach(app, "共有の更新の知らせ")
+    }
+
     // MARK: - 記録の検索・編集
 
     func testSearchAndEditRecord() {

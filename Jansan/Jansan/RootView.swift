@@ -63,6 +63,8 @@ struct RootView: View {
             board.attach(context: context)
             SharePublisher.markSharesForProductionOnce(in: context)
             await SharePublisher.publishPending(in: context)
+            // 受け取っているフォルダの「更新の知らせ」をそろえる（入れ直し・機種変更のあとも届くように）
+            await ShareNotifier.syncAll(in: context)
         }
         // オフラインで保存した分は、次に前面に来たときに送る
         .onChange(of: scenePhase) { _, phase in

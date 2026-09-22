@@ -203,6 +203,7 @@ struct DirectoryView: View {
         if directory.isSubscribed {
             let id = directory.shareID, pw = directory.sharePassword
             Task { await ShareClient.removeReceipt(id: id, password: pw) }
+            Task { await ShareNotifier.disable(id: id, password: pw) }
         }
         for game in DirectoryStore.games(of: directory, in: context) { context.delete(game) }
         if isCurrent { currentDirectoryID = Directory.defaultUID.uuidString }

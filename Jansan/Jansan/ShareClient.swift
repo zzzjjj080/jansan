@@ -180,6 +180,14 @@ enum ShareClient {
 
     // MARK: - 受け取る（購読）
 
+    /// 共有レコードの札（ownerToken）だけを読む。更新の知らせを頼むときの目印に使う
+    static func ownerToken(id: String, password: String) async -> String? {
+        let recordID = CKRecord.ID(recordName: ShareCrypto.recordName(id: id, password: password))
+        guard let result = try? await database.records(for: [recordID], desiredKeys: ["ownerToken"]),
+              case .success(let record)? = result[recordID] else { return nil }
+        return record["ownerToken"] as? String
+    }
+
     static func fetch(id: String, password: String) async throws -> SharedDirectoryDocument {
         let recordID = CKRecord.ID(recordName: ShareCrypto.recordName(id: id, password: password))
         let record: CKRecord

@@ -30,6 +30,7 @@ struct SettingsView: View {
                 autoAdvanceSection
                 recordSection
                 backupSection
+                ShareNotifySection()
                 FeedbackSection()
                 CoffeeTipSection(tipJar: tipJar, tint: Palette.toneAInk)
                 eraseSection
