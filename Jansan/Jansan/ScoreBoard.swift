@@ -444,5 +444,15 @@ final class ScoreBoard {
         }
         deselect()
     }
+
+    /// UIテスト用。前のテストが消した人を戻すため、名簿と表をまっさらにする。
+    /// 取り消しの履歴も捨てる（テストの前の状態へ戻れても意味がない）
+    func replaceRosterForUITest(_ roster: Roster) {
+        undo.removeAll()
+        self.roster = roster
+        session = Session(players: roster.activeNames)
+        deselect()
+        saveDraft()
+    }
 #endif
 }

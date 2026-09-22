@@ -13,12 +13,11 @@ import JansanCore
 /// 切り替えは画面の**上**。下に置くとテンキーと場所を取り合い、入力の邪魔になる。
 struct RootView: View {
     /// 表の状態は両タブで共有する。記録タブから「読み込む」と入力タブの表が変わるため
-    @State private var board = ScoreBoard(
-        roster: Roster(
-            names: ["中村", "五十嵐", "斎藤", "佐々木", "石井", "小野寺"],
-            activeCount: 4
-        )
-    )
+    @State private var board = ScoreBoard(roster: Self.initialRoster)
+    /// 初めて開いたときの名簿
+    private static var initialRoster: Roster {
+        Roster(names: ["中村", "五十嵐", "斎藤", "佐々木", "石井", "小野寺"], activeCount: 4)
+    }
     @AppStorage("appTheme") private var appTheme = AppTheme.system
     /// 起動時は必ず「入力」。前回のタブを覚えない。
     /// 卓で開いたときに記録タブから始まると、まず戻す操作が要る
@@ -61,6 +60,12 @@ struct RootView: View {
             // 1か月たった自動バックアップの控えを消す
             DirectoryStore.pruneAutoBackups(in: context)
             board.attach(context: context)
+#if DEBUG
+            // UIテスト用。名簿は前のテストの続きが残るので、初めての名簿から始め直す
+            if UserDefaults.standard.bool(forKey: "resetRosterForUITest") {
+                board.replaceRosterForUITest(Self.initialRoster)
+            }
+#endif
             SharePublisher.markSharesForProductionOnce(in: context)
             await SharePublisher.publishPending(in: context)
             // 受け取っているフォルダの「更新の知らせ」をそろえる（入れ直し・機種変更のあとも届くように）

@@ -10,9 +10,9 @@ final class DirectoryUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    private func launchApp() -> XCUIApplication {
+    private func launchApp(arguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-didShowHowTo", "YES"]
+        app.launchArguments = ["-didShowHowTo", "YES"] + arguments
         app.launch()
         return app
     }
@@ -989,7 +989,9 @@ extension DirectoryUITests {
     /// **メンバーを消しても、保存済みの記録は消えないこと。**
     /// 同じ名前で登録し直せば、集計でも同じ人として束ねられる
     func testDeletingMemberKeepsSavedRecords() {
-        let app = launchApp()
+        // このテスト自身が佐々木を消すので、2回目以降は名簿にいない。
+        // デモデータでは戻らないため、起動のたびに初めての名簿へ戻す
+        let app = launchApp(arguments: ["-resetRosterForUITest", "YES"])
         useDefaultDirectory(app)
 
         // 記録を1つ作る
