@@ -5,7 +5,6 @@ struct ExportView: View {
     let board: ScoreBoard
     @Environment(\.dismiss) private var dismiss
     @State private var didCopy = false
-    @State private var tipJar = TipJar(productID: TipJar.productID)
 
     private var text: String { board.session.csv() }
 
@@ -51,10 +50,6 @@ struct ExportView: View {
                     .buttonStyle(.bordered)
                 }
                 .font(.system(size: 14, weight: .bold))
-
-                // 使い終わった直後に置く。作業の邪魔をしないよう1行だけ。
-                CoffeeTipLink(tipJar: tipJar, tint: Palette.toneAInk)
-                    .frame(maxWidth: .infinity, alignment: .center)
             }
             .padding(16)
             .navigationTitle("書き出し（CSV）")

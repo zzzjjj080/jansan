@@ -9,7 +9,6 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
 
-    @State private var tipJar = TipJar(productID: TipJar.productID)
     @State private var didSave = false
     @State private var limitAlert = false
     @State private var pendingDeletion: Roster.Member.ID?
@@ -32,7 +31,7 @@ struct SettingsView: View {
                 backupSection
                 ShareNotifySection()
                 FeedbackSection()
-                CoffeeTipSection(tipJar: tipJar, tint: Palette.toneAInk)
+                OtherAppsSection()
                 eraseSection
 #if DEBUG
                 debugSection
